@@ -27,6 +27,61 @@
             padding: 0;
         }
 
+        /* Windows Phone 地图风格 */
+        .leaflet-container {
+            font-family: 'Segoe WP', 'Segoe UI', 'Roboto', sans-serif;
+            background-color: #f8f8f8;
+        }
+
+        /* 简化缩放控件样式 */
+        .leaflet-control-zoom {
+            border: none !important;
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-radius: 2px !important;
+            box-shadow: none !important;
+            overflow: hidden;
+        }
+
+        .leaflet-control-zoom a {
+            background: transparent !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+            border-radius: 0 !important;
+            width: 36px !important;
+            height: 36px !important;
+            line-height: 36px !important;
+            color: #333 !important;
+            font-size: 18px !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: rgba(0, 0, 0, 0.05) !important;
+        }
+
+        .leaflet-control-zoom a:first-child {
+            border-bottom: none !important;
+        }
+
+        /* 移除默认阴影和圆角 */
+        .leaflet-control-attribution {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+            border-radius: 2px !important;
+            font-size: 11px !important;
+        }
+
+        /* 弹窗样式 */
+        .leaflet-popup-content-wrapper {
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+            border-radius: 4px !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .leaflet-popup-tip {
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        }
+
         /* 页面容器 */
         .page {
             display: none;
@@ -2274,10 +2329,10 @@
                 scrollWheelZoom: true
             });
 
-            // 使用高德地图瓦片（国内访问更快）
-            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-                attribution: '高德地图',
-                subdomains: '1234',
+            // 使用 CartoDB 浅色底图 - Windows Phone 风格
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: 'Map data © OpenStreetMap contributors, CartoDB',
+                subdomains: 'abcd',
                 maxZoom: 19,
                 tileSize: 256
             }).addTo(searchMap).on('load', function() {
@@ -2298,10 +2353,10 @@
                 scrollWheelZoom: true
             });
 
-            // 使用高德地图瓦片（国内访问更快）
-            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-                attribution: '高德地图',
-                subdomains: '1234',
+            // 使用 CartoDB 浅色底图 - Windows Phone 风格
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: 'Map data © OpenStreetMap contributors, CartoDB',
+                subdomains: 'abcd',
                 maxZoom: 19,
                 tileSize: 256
             }).addTo(resultMap).on('load', function() {
@@ -2675,25 +2730,25 @@
 
             resultMap.setView([centerLat, centerLon], zoom);
 
-            // 起点标记 - 蓝色渐变圆形
+            // 起点标记 - Windows Phone 风格蓝色圆形
             L.marker([origin.latitude_deg, origin.longitude_deg], {
                 icon: L.divIcon({
                     className: 'origin-marker',
-                    html: '<div style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 30% 30%, #60a5fa, #1e40af); border-radius:50%; box-shadow:0 4px 20px rgba(30, 136, 238, 0.4), 0 0 0 3px rgba(255,255,255,0.3) inset;"><i class="fas fa-plane-departure" style="color:white; font-size:16px; text-shadow:0 1px 2px rgba(0,0,0,0.3);"></i></div>',
-                    iconSize: [44, 44],
-                    iconAnchor: [22, 22]
+                    html: '<div style="background: #0078d7; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 2px rgba(0,0,0,0.15);"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
                 })
-            }).addTo(resultMap).bindPopup(`<strong>${origin.name}</strong><br>IATA: ${origin.iata_code}<br><span style="color:#1565c0;">起点机场</span>`);
+            }).addTo(resultMap).bindPopup(`<strong>${origin.name}</strong><br>IATA: ${origin.iata_code}<br><span style="color:#0078d7;">起点机场</span>`);
 
-            // 终点标记 - 绿色渐变圆形
+            // 终点标记 - Windows Phone 风格绿色圆形
             L.marker([dest.latitude_deg, dest.longitude_deg], {
                 icon: L.divIcon({
                     className: 'dest-marker',
-                    html: '<div style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 30% 30%, #86efac, #166534); border-radius:50%; box-shadow:0 4px 20px rgba(76, 175, 80, 0.4), 0 0 0 3px rgba(255,255,255,0.3) inset;"><i class="fas fa-plane-arrival" style="color:white; font-size:16px; text-shadow:0 1px 2px rgba(0,0,0,0.3);"></i></div>',
-                    iconSize: [44, 44],
-                    iconAnchor: [22, 22]
+                    html: '<div style="background: #10b981; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 2px rgba(0,0,0,0.15);"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
                 })
-            }).addTo(resultMap).bindPopup(`<strong>${dest.name}</strong><br>IATA: ${dest.iata_code}<br><span style="color:#2e7d32;">终点机场</span>`);
+            }).addTo(resultMap).bindPopup(`<strong>${dest.name}</strong><br>IATA: ${dest.iata_code}<br><span style="color:#10b981;">终点机场</span>`);
 
             // 起点半径圈
             L.circle([origin.latitude_deg, origin.longitude_deg], {
@@ -2719,37 +2774,37 @@
             });
             routePolylines = [];
 
-            // 起点周边机场 - 蓝色小圆点
+            // 起点周边机场 - Windows Phone 风格蓝色小圆点
             originNearby.forEach(airport => {
                 L.marker([airport.latitude_deg, airport.longitude_deg], {
                     icon: L.divIcon({
-                        html: '<div style="width:20px; height:20px; background:radial-gradient(circle at 30% 30%, #93c5fd, #1d4ed8); border-radius:50%; box-shadow:0 2px 8px rgba(30, 136, 238, 0.35);"></div>',
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
+                        html: '<div style="background: #0078d7; width: 8px; height: 8px; border-radius: 50%; border: 1px solid white; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>',
+                        iconSize: [8, 8],
+                        iconAnchor: [4, 4]
                     })
                 }).addTo(resultMap).bindPopup(`<strong>${airport.name}</strong><br>IATA: ${airport.iata_code}<br>距离: ${airport.distance.toFixed(1)}公里`);
             });
 
-            // 终点周边机场 - 绿色小圆点
+            // 终点周边机场 - Windows Phone 风格绿色小圆点
             destNearby.forEach(airport => {
                 L.marker([airport.latitude_deg, airport.longitude_deg], {
                     icon: L.divIcon({
-                        html: '<div style="width:20px; height:20px; background:radial-gradient(circle at 30% 30%, #bbf7d0, #166534); border-radius:50%; box-shadow:0 2px 8px rgba(76, 175, 80, 0.35);"></div>',
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
+                        html: '<div style="background: #10b981; width: 8px; height: 8px; border-radius: 50%; border: 1px solid white; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>',
+                        iconSize: [8, 8],
+                        iconAnchor: [4, 4]
                     })
                 }).addTo(resultMap).bindPopup(`<strong>${airport.name}</strong><br>IATA: ${airport.iata_code}<br>距离: ${airport.distance.toFixed(1)}公里`);
             });
 
-            // 为每条航线添加连线
+            // 为每条航线添加连线 - Windows Phone 风格
             allRoutes.forEach((route, index) => {
                 const polyline = L.polyline(
                     [[route.origin.latitude_deg, route.origin.longitude_deg], [route.dest.latitude_deg, route.dest.longitude_deg]], 
                     {
-                        color: index === 0 ? '#f44336' : '#ddd',
-                        weight: index === 0 ? 5 : 2,
-                        opacity: index === 0 ? 0.8 : 0.3,
-                        dashArray: index === 0 ? '10,10' : '5,5'
+                        color: '#00A1F1',
+                        weight: index === 0 ? 3 : 2,
+                        opacity: index === 0 ? 0.7 : 0.4,
+                        dashArray: '8,4'
                     }
                 ).addTo(resultMap);
                 
