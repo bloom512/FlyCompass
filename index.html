@@ -2675,23 +2675,23 @@
 
             resultMap.setView([centerLat, centerLon], zoom);
 
-            // 起点标记
+            // 起点标记 - 蓝色渐变圆形
             L.marker([origin.latitude_deg, origin.longitude_deg], {
                 icon: L.divIcon({
                     className: 'origin-marker',
-                    html: '<div style="background:#1e88e5; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(30,136,238,0.5); outline:none; border:none;"><i class="fas fa-plane-departure" style="color:white; font-size:18px;"></i></div>',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
+                    html: '<div style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 30% 30%, #60a5fa, #1e40af); border-radius:50%; box-shadow:0 4px 20px rgba(30, 136, 238, 0.4), 0 0 0 3px rgba(255,255,255,0.3) inset;"><i class="fas fa-plane-departure" style="color:white; font-size:16px; text-shadow:0 1px 2px rgba(0,0,0,0.3);"></i></div>',
+                    iconSize: [44, 44],
+                    iconAnchor: [22, 22]
                 })
             }).addTo(resultMap).bindPopup(`<strong>${origin.name}</strong><br>IATA: ${origin.iata_code}<br><span style="color:#1565c0;">起点机场</span>`);
 
-            // 终点标记
+            // 终点标记 - 绿色渐变圆形
             L.marker([dest.latitude_deg, dest.longitude_deg], {
                 icon: L.divIcon({
                     className: 'dest-marker',
-                    html: '<div style="background:#4caf50; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(76,175,80,0.5); outline:none; border:none;"><i class="fas fa-plane-arrival" style="color:white; font-size:18px;"></i></div>',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
+                    html: '<div style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 30% 30%, #86efac, #166534); border-radius:50%; box-shadow:0 4px 20px rgba(76, 175, 80, 0.4), 0 0 0 3px rgba(255,255,255,0.3) inset;"><i class="fas fa-plane-arrival" style="color:white; font-size:16px; text-shadow:0 1px 2px rgba(0,0,0,0.3);"></i></div>',
+                    iconSize: [44, 44],
+                    iconAnchor: [22, 22]
                 })
             }).addTo(resultMap).bindPopup(`<strong>${dest.name}</strong><br>IATA: ${dest.iata_code}<br><span style="color:#2e7d32;">终点机场</span>`);
 
@@ -2719,24 +2719,24 @@
             });
             routePolylines = [];
 
-            // 起点周边机场
+            // 起点周边机场 - 蓝色小圆点
             originNearby.forEach(airport => {
                 L.marker([airport.latitude_deg, airport.longitude_deg], {
                     icon: L.divIcon({
-                        html: '<div style="background:#90caf9; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; outline:none; border:none;"><i class="fas fa-circle" style="color:#1565c0; font-size:10px;"></i></div>',
-                        iconSize: [28, 28],
-                        iconAnchor: [14, 14]
+                        html: '<div style="width:20px; height:20px; background:radial-gradient(circle at 30% 30%, #93c5fd, #1d4ed8); border-radius:50%; box-shadow:0 2px 8px rgba(30, 136, 238, 0.35);"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
                     })
                 }).addTo(resultMap).bindPopup(`<strong>${airport.name}</strong><br>IATA: ${airport.iata_code}<br>距离: ${airport.distance.toFixed(1)}公里`);
             });
 
-            // 终点周边机场
+            // 终点周边机场 - 绿色小圆点
             destNearby.forEach(airport => {
                 L.marker([airport.latitude_deg, airport.longitude_deg], {
                     icon: L.divIcon({
-                        html: '<div style="background:#a5d6a7; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; outline:none; border:none;"><i class="fas fa-circle" style="color:#2e7d32; font-size:10px;"></i></div>',
-                        iconSize: [28, 28],
-                        iconAnchor: [14, 14]
+                        html: '<div style="width:20px; height:20px; background:radial-gradient(circle at 30% 30%, #bbf7d0, #166534); border-radius:50%; box-shadow:0 2px 8px rgba(76, 175, 80, 0.35);"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
                     })
                 }).addTo(resultMap).bindPopup(`<strong>${airport.name}</strong><br>IATA: ${airport.iata_code}<br>距离: ${airport.distance.toFixed(1)}公里`);
             });
