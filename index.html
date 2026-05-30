@@ -2260,10 +2260,10 @@
                 airportExpanded = false;
                 displayedAirportCount = 5;
 
-                // 更新UI
-                updateResultPage(originAirport, null, originNearby, []);
+                // 更新UI - 先切换页面再更新内容
                 switchToResultPage();
                 updateResultMap(originAirport, originNearby, originRadius, null, [], 0);
+                updateResultPage(originAirport, null, originNearby, []);
                 return;
             }
 
@@ -2315,10 +2315,10 @@
             airportExpanded = false;
             displayedAirportCount = 5;
 
-            // 更新UI
-            updateResultPage(originAirport, destAirport, originNearby, destNearby);
+            // 更新UI - 先切换页面再更新内容
             switchToResultPage();
             updateResultMap(originAirport, originNearby, originRadius, destAirport, destNearby, destRadius);
+            updateResultPage(originAirport, destAirport, originNearby, destNearby);
         }
 
         function updateResultPage(originAirport, destAirport, originNearby, destNearby) {
