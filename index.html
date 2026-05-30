@@ -1,0 +1,2666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>全球机场航线搜索</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 页面容器 */
+        .page {
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .page.active {
+            display: flex;
+        }
+
+        /* 搜索页面 */
+        #searchPage {
+            position: relative;
+            flex: 1;
+        }
+
+        #searchMap {
+            flex: 1;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        .map-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-loader {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.3s ease;
+        }
+
+        .map-loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4a90d9;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .search-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .search-card {
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            flex: 1;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            outline: none;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .input-group input:focus {
+            border-color: rgba(102, 126, 234, 0.4);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-group input::placeholder {
+            color: #bbb;
+        }
+
+        .search-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .search-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        .search-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        .input-row.destination {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed #e0e0e0;
+        }
+
+        /* 结果页面 */
+        #resultPage {
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .result-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 15px 20px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            flex-shrink: 0;
+            z-index: 20;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .result-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .airport-tag {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 20px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+
+        .airport-tag.origin {
+            color: #1d4ed8;
+        }
+
+        .airport-tag.origin i {
+            color: #3b82f6;
+        }
+
+        .airport-tag.destination {
+            color: #166534;
+        }
+
+        .airport-tag.destination i {
+            color: #22c55e;
+        }
+
+        .airport-tag i {
+            font-size: 16px;
+        }
+
+        .route-arrow {
+            color: #999;
+            font-size: 18px;
+        }
+
+        #resultMap {
+            flex: 1;
+            min-height: 250px;
+        }
+
+        /* Tab 导航 */
+        .tabs-container {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            flex-shrink: 0;
+            z-index: 15;
+        }
+
+        .tabs {
+            display: flex;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 14px 12px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .tab:hover {
+            background: #f5f5f5;
+        }
+
+        /* Tab 内容 */
+        .tab-content {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        /* 航线表格 */
+        .routes-table-wrapper {
+            padding: 15px;
+        }
+
+        .routes-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .routes-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .routes-table th {
+            background: rgba(248, 249, 250, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 14px 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .routes-table td {
+            padding: 14px 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            font-size: 13px;
+        }
+
+        .routes-table tr:hover {
+            background: #fafafa;
+        }
+
+        .routes-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .route-airport {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .route-airport span {
+            font-weight: normal;
+            color: #999;
+            font-size: 11px;
+            display: block;
+        }
+
+        .route-distance {
+            color: #1e88e5;
+            font-weight: 500;
+        }
+
+        .route-location {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .route-price {
+            text-align: right;
+        }
+
+        .price-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f44336;
+        }
+
+        .price-hint {
+            display: block;
+            font-size: 11px;
+            color: #999;
+            font-weight: normal;
+        }
+
+        /* 评分显示 */
+        .score-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .score-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #e65100;
+        }
+
+        .star-rating {
+            display: flex;
+            gap: 1px;
+        }
+
+        .star-rating .star {
+            font-size: 12px;
+            color: #ddd;
+        }
+
+        .star-rating .star.filled {
+            color: #ffc107;
+        }
+
+        .view-all-btn {
+            width: calc(100% - 30px);
+            margin: 15px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #6366f1;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .view-all-btn:hover {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        /* 机场列表 */
+        .airport-list-wrapper {
+            padding: 15px;
+        }
+
+        .airport-item {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .airport-item.origin {
+            border-left: 4px solid #42a5f5;
+        }
+
+        .airport-item.destination {
+            border-left: 4px solid #66bb6a;
+        }
+
+        .airport-info h4 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
+        }
+
+        .airport-info p {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .airport-distance {
+            text-align: right;
+        }
+
+        .distance-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .distance-unit {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* 评分详情弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 2000;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-height: 80vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px 24px 0 0;
+            padding: 0;
+            overflow-y: auto;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            border-top: 1px solid rgba(255, 255, 255, 0.5);
+            animation: slideUp 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .modal-tabs {
+            display: flex;
+            border-bottom: 1px solid #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .modal-tab {
+            flex: 1;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #999;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .modal-tab.active {
+            color: #4a90d9;
+        }
+
+        .modal-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 2px;
+            background: #4a90d9;
+        }
+
+        #detailContent {
+            padding: 20px 25px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #f0f0f0;
+            border: none;
+            font-size: 20px;
+            color: #666;
+            cursor: pointer;
+        }
+
+        .score-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .score-detail-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .score-detail-item .label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 6px;
+        }
+
+        .score-detail-item .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .score-detail-item .desc {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .lcc-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .lcc-badge.yes {
+            background: #4caf50;
+            color: white;
+        }
+
+        .lcc-badge.no {
+            background: #e0e0e0;
+            color: #999;
+        }
+
+        .score-summary {
+            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+            margin-top: 15px;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .score-summary .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #e65100;
+        }
+
+        /* 错误提示 */
+        .error-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 20px;
+            right: 20px;
+            background: #c62828;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 3000;
+            box-shadow: 0 4px 20px rgba(198, 40, 40, 0.4);
+        }
+
+        .error-toast.show {
+            display: flex;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 响应式调整 */
+        @media (min-width: 768px) {
+            .search-card {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+
+            #resultPage {
+                flex-direction: row;
+            }
+
+            .map-container {
+                width: 50%;
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+            }
+
+            #resultMap {
+                width: 100%;
+                height: 100%;
+            }
+
+            .results-container {
+            width: 50%;
+            margin-left: 50%;
+            display: flex;
+            flex-direction: column;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+
+            .result-header {
+                position: sticky;
+                top: 0;
+                z-index: 100;
+            }
+
+            .modal-content {
+                max-width: 500px;
+                border-radius: 20px;
+                margin-bottom: 30px;
+            }
+
+            .back-btn {
+                top: 20px;
+                left: 20px;
+                right: auto;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .map-container {
+                width: 100%;
+                height: 40vh;
+                min-height: 250px;
+                flex-shrink: 0;
+            }
+
+            #resultMap {
+                width: 100%;
+                height: 100%;
+            }
+
+            .results-container {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                min-height: 0;
+            }
+
+            .back-btn {
+                top: 15px;
+                right: 15px;
+                left: auto;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .input-row {
+                flex-direction: column;
+            }
+
+            .input-group input[type="number"] {
+                width: 100%;
+            }
+
+            .tab {
+                min-width: 100px;
+                font-size: 13px;
+                padding: 12px 8px;
+            }
+        }
+
+        /* 返回按钮 */
+        .back-btn {
+            position: fixed;
+            z-index: 1000;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: white;
+            border: none;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #f5f5f5;
+            transform: scale(1.05);
+        }
+
+        .back-btn i {
+            margin-right: 2px;
+        }
+
+        /* 自动完成下拉框 */
+        .autocomplete-container {
+            position: relative;
+        }
+
+        .autocomplete-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #667eea;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1001;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background: #f0f0f8;
+        }
+
+        .autocomplete-item.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .autocomplete-item .airport-code {
+            font-weight: bold;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        .autocomplete-item .airport-name {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .autocomplete-item:hover .airport-name,
+        .autocomplete-item.active .airport-name {
+            color: #ddd;
+        }
+
+        .autocomplete-item .airport-city {
+            font-size: 12px;
+            color: #999;
+            margin-top: 3px;
+        }
+
+        .autocomplete-item .airport-city .chinese-name {
+            color: #4a90d9;
+            font-weight: 500;
+        }
+
+        .autocomplete-item:hover .airport-city,
+        .autocomplete-item.active .airport-city {
+            color: #bbb;
+        }
+
+        .no-results {
+            padding: 15px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .search-hint {
+            padding: 10px 15px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            background: #f8f8f8;
+        }
+    </style>
+</head>
+<body>
+    <!-- 搜索页面 -->
+    <div id="searchPage" class="page active">
+        <div class="map-wrapper">
+            <div id="searchMap"></div>
+            <div id="searchMapLoader" class="map-loader">
+                <div class="loader-spinner"></div>
+                <div class="loader-text">地图加载中...</div>
+            </div>
+        </div>
+        <div class="search-overlay">
+            <div class="search-card">
+                <!-- 起点 -->
+                <div class="input-row origin">
+                    <div class="input-group autocomplete-container">
+                        <label><i class="fas fa-plane-departure"></i> 起点机场IATA码</label>
+                        <input type="text" id="originIata" placeholder="输入城市或国家搜索，如：北京、Shanghai" autocomplete="off">
+                        <div class="autocomplete-dropdown" id="originDropdown"></div>
+                    </div>
+                    <div class="input-group">
+                        <label><i class="fas fa-ruler"></i> 搜索半径（公里）</label>
+                        <input type="number" id="originRadius" value="100" min="50" max="1000" step="50">
+                    </div>
+                </div>
+
+                <!-- 终点 -->
+                <div class="input-row destination">
+                    <div class="input-group autocomplete-container">
+                        <label><i class="fas fa-plane-arrival"></i> 终点机场IATA码</label>
+                        <input type="text" id="destIata" placeholder="输入城市或国家搜索，如：东京、Tokyo" autocomplete="off">
+                        <div class="autocomplete-dropdown" id="destDropdown"></div>
+                    </div>
+                    <div class="input-group">
+                        <label><i class="fas fa-ruler"></i> 搜索半径（公里）</label>
+                        <input type="number" id="destRadius" value="100" min="50" max="1000" step="50">
+                    </div>
+                </div>
+
+                <button class="search-btn" onclick="searchRoutes()">
+                    <i class="fas fa-search"></i> 查询
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结果页面 -->
+    <div id="resultPage" class="page">
+        <div class="map-container">
+            <div class="map-wrapper">
+                <div id="resultMap"></div>
+                <div id="resultMapLoader" class="map-loader">
+                    <div class="loader-spinner"></div>
+                    <div class="loader-text">地图加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="results-container">
+            <div class="result-header">
+                <div class="result-info" id="resultInfo">
+                    <span class="airport-tag origin">
+                        <i class="fas fa-plane-departure"></i>
+                        <span id="originInfo">选择起点</span>
+                    </span>
+                    <span class="route-arrow"><i class="fas fa-arrow-right"></i></span>
+                    <span class="airport-tag destination">
+                        <i class="fas fa-plane-arrival"></i>
+                        <span id="destInfo">选择终点</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('routes')" id="tabRoutes">航线组合</button>
+                    <button class="tab" onclick="switchTab('origin')" id="tabOrigin">起点周边机场</button>
+                    <button class="tab" onclick="switchTab('dest')" id="tabDest">终点周边机场</button>
+                </div>
+            </div>
+
+            <div class="tab-content active" id="contentRoutes">
+                <div class="routes-table-wrapper">
+                    <table class="routes-table">
+                        <thead>
+                            <tr>
+                                <th>出发机场</th>
+                                <th>到达机场</th>
+                                <th>飞行距离</th>
+                                <th>低价推荐指数</th>
+                                <th>预估价格</th>
+                            </tr>
+                        </thead>
+                        <tbody id="routesBody">
+                            <tr><td colspan="5" style="text-align:center; padding: 30px; color:#999;">点击查询开始搜索</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <button class="view-all-btn" onclick="viewAllRoutes()" style="display:none;" id="viewAllBtn">查看全部</button>
+            </div>
+
+            <div class="tab-content" id="contentOrigin">
+                <div class="airport-list-wrapper" id="originAirportList">
+                    <p style="text-align:center; color:#999; padding: 30px;">点击查询开始搜索</p>
+                </div>
+            </div>
+
+            <div class="tab-content" id="contentDest">
+                <div class="airport-list-wrapper" id="destAirportList">
+                    <p style="text-align:center; color:#999; padding: 30px;">点击查询开始搜索</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 评分详情弹窗 -->
+    <div class="modal-overlay" id="detailModal" onclick="closeDetailModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>航线详情</h3>
+                <button class="modal-close" onclick="closeDetailModal()">×</button>
+            </div>
+            <div class="modal-tabs">
+                <button class="modal-tab active" id="tabScore" onclick="showDetailContent('score')">评分详情</button>
+                <button class="modal-tab" id="tabPrice" onclick="showDetailContent('price')">预估价格</button>
+            </div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <!-- 错误提示 -->
+    <div class="error-toast" id="errorToast">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="errorMessage"></span>
+    </div>
+
+    <!-- 返回按钮（结果页） -->
+    <button class="back-btn" onclick="goBack()" id="backBtn" style="display:none;">
+        <i class="fas fa-arrow-left"></i>
+    </button>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let airportsData = [];
+        let searchMap = null;
+        let resultMap = null;
+        let currentRouteDetail = null;
+        let allRoutes = [];
+        let routePolylines = [];
+        let displayedRoutesCount = 5;
+        let originNearbyAll = [];
+        let destNearbyAll = [];
+        let displayedAirportCount = 5;
+        let airportExpanded = false;
+        let originSelectedIndex = -1;
+        let destSelectedIndex = -1;
+
+        // 常用汉字拼音映射表（覆盖大部分常用城市名称）
+        const CHINESE_PINYIN = {
+            // A
+            '阿': 'a', '啊': 'a', '埃': 'ai', '爱': 'ai', '艾': 'ai', '安': 'an', '岸': 'an', '昂': 'ang', '敖': 'ao',
+            // B
+            '巴': 'ba', '八': 'ba', '白': 'bai', '百': 'bai', '柏': 'bai', '拜': 'bai', '班': 'ban', '板': 'ban', '半': 'ban', '邦': 'bang', '包': 'bao', '宝': 'bao', '报': 'bao', '北': 'bei', '杯': 'bei', '贝': 'bei', '备': 'bei', '本': 'ben', '比': 'bi', '彼': 'bi', '碧': 'bi', '辟': 'bi', '边': 'bian', '变': 'bian', '卞': 'bian', '标': 'biao', '表': 'biao', '别': 'bie', '宾': 'bin', '冰': 'bing', '波': 'bo', '伯': 'bo', '博': 'bo', '布': 'bu', '步': 'bu', '部': 'bu',
+            // C
+            '才': 'cai', '彩': 'cai', '参': 'can', '餐': 'can', '沧': 'cang', '苍': 'cang', '操': 'cao', '曹': 'cao', '草': 'cao', '策': 'ce', '岑': 'cen', '层': 'ceng', '查': 'cha', '茶': 'cha', '察': 'cha', '差': 'cha', '柴': 'chai', '产': 'chan', '昌': 'chang', '长': 'chang', '常': 'chang', '场': 'chang', '尝': 'chang', '超': 'chao', '朝': 'chao', '潮': 'chao', '车': 'che', '扯': 'che', '彻': 'che', '郴': 'chen', '尘': 'chen', '辰': 'chen', '晨': 'chen', '成': 'cheng', '城': 'cheng', '乘': 'cheng', '程': 'cheng', '池': 'chi', '迟': 'chi', '赤': 'chi', '翅': 'chi', '充': 'chong', '冲': 'chong', '崇': 'chong', '抽': 'chou', '仇': 'chou', '丑': 'chou', '出': 'chu', '初': 'chu', '除': 'chu', '楚': 'chu', '处': 'chu', '川': 'chuan', '穿': 'chuan', '传': 'chuan', '船': 'chuan', '春': 'chun', '椿': 'chun', '淳': 'chun', '纯': 'chun', '慈': 'ci', '辞': 'ci', '此': 'ci', '次': 'ci', '从': 'cong', '丛': 'cong', '凑': 'cou', '粗': 'cu', '促': 'cu', '崔': 'cui', '催': 'cui', '翠': 'cui', '存': 'cun', '村': 'cun', '寸': 'cun',
+            // D
+            '达': 'da', '大': 'da', '代': 'dai', '带': 'dai', '戴': 'dai', '丹': 'dan', '单': 'dan', '担': 'dan', '旦': 'dan', '但': 'dan', '淡': 'dan', '当': 'dang', '党': 'dang', '荡': 'dang', '刀': 'dao', '导': 'dao', '岛': 'dao', '到': 'dao', '倒': 'dao', '道': 'dao', '德': 'de', '登': 'deng', '等': 'deng', '低': 'di', '滴': 'di', '堤': 'di', '迪': 'di', '敌': 'di', '笛': 'di', '底': 'di', '地': 'di', '第': 'di', '帝': 'di', '弟': 'di', '递': 'di', '点': 'dian', '殿': 'dian', '叠': 'die', '丁': 'ding', '顶': 'ding', '定': 'ding', '东': 'dong', '冬': 'dong', '董': 'dong', '动': 'dong', '栋': 'dong', '都': 'du', '督': 'du', '毒': 'du', '独': 'du', '读': 'du', '度': 'du', '渡': 'du', '端': 'duan', '断': 'duan', '对': 'dui', '队': 'dui', '墩': 'dun', '顿': 'dun', '多': 'duo', '夺': 'duo', '朵': 'duo', '躲': 'duo',
+            // E
+            '俄': 'e', '额': 'e', '厄': 'e', '鄂': 'e', '恩': 'en', '而': 'er', '耳': 'er', '二': 'er',
+            // F
+            '发': 'fa', '伐': 'fa', '法': 'fa', '番': 'fan', '翻': 'fan', '樊': 'fan', '繁': 'fan', '反': 'fan', '返': 'fan', '范': 'fan', '方': 'fang', '坊': 'fang', '芳': 'fang', '房': 'fang', '防': 'fang', '妨': 'fang', '仿': 'fang', '访': 'fang', '飞': 'fei', '非': 'fei', '肥': 'fei', '费': 'fei', '芬': 'fen', '纷': 'fen', '坟': 'fen', '汾': 'fen', '粉': 'fen', '奋': 'fen', '丰': 'feng', '封': 'feng', '峰': 'feng', '风': 'feng', '疯': 'feng', '冯': 'feng', '逢': 'feng', '凤': 'feng', '佛': 'fo', '否': 'fou', '夫': 'fu', '敷': 'fu', '福': 'fu', '扶': 'fu', '浮': 'fu', '符': 'fu', '服': 'fu', '府': 'fu', '俯': 'fu', '副': 'fu', '傅': 'fu', '富': 'fu', '父': 'fu', '腹': 'fu', '附': 'fu',
+            // G
+            '该': 'gai', '改': 'gai', '概': 'gai', '干': 'gan', '甘': 'gan', '杆': 'gan', '肝': 'gan', '赶': 'gan', '敢': 'gan', '感': 'gan', '刚': 'gang', '纲': 'gang', '岗': 'gang', '港': 'gang', '高': 'gao', '告': 'gao', '哥': 'ge', '歌': 'ge', '格': 'ge', '阁': 'ge', '隔': 'ge', '个': 'ge', '各': 'ge', '根': 'gen', '跟': 'gen', '更': 'geng', '耕': 'geng', '耿': 'geng', '工': 'gong', '攻': 'gong', '功': 'gong', '恭': 'gong', '供': 'gong', '公': 'gong', '宫': 'gong', '巩': 'gong', '拱': 'gong', '共': 'gong', '勾': 'gou', '沟': 'gou', '苟': 'gou', '狗': 'gou', '构': 'gou', '购': 'gou', '辜': 'gu', '姑': 'gu', '孤': 'gu', '估': 'gu', '谷': 'gu', '股': 'gu', '骨': 'gu', '鼓': 'gu', '固': 'gu', '故': 'gu', '顾': 'gu', '瓜': 'gua', '刮': 'gua', '寡': 'gua', '挂': 'gua', '乖': 'guai', '关': 'guan', '官': 'guan', '冠': 'guan', '观': 'guan', '管': 'guan', '馆': 'guan', '惯': 'guan', '光': 'guang', '广': 'guang', '归': 'gui', '龟': 'gui', '规': 'gui', '轨': 'gui', '鬼': 'gui', '桂': 'gui', '贵': 'gui', '滚': 'gun', '棍': 'gun', '锅': 'guo', '国': 'guo', '果': 'guo', '裹': 'guo',
+            // H
+            '哈': 'ha', '海': 'hai', '害': 'hai', '邯': 'han', '含': 'han', '函': 'han', '寒': 'han', '韩': 'han', '汉': 'han', '汗': 'han', '杭': 'hang', '航': 'hang', '毫': 'hao', '豪': 'hao', '好': 'hao', '浩': 'hao', '赫': 'he', '黑': 'hei', '亨': 'heng', '衡': 'heng', '恒': 'heng', '横': 'heng', '宏': 'hong', '红': 'hong', '洪': 'hong', '鸿': 'hong', '侯': 'hou', '后': 'hou', '厚': 'hou', '胡': 'hu', '湖': 'hu', '壶': 'hu', '呼': 'hu', '忽': 'hu', '乎': 'hu', '虎': 'hu', '互': 'hu', '户': 'hu', '花': 'hua', '华': 'hua', '滑': 'hua', '画': 'hua', '化': 'hua', '话': 'hua', '坏': 'huai', '欢': 'huan', '还': 'huan', '环': 'huan', '缓': 'huan', '换': 'huan', '患': 'huan', '黄': 'huang', '皇': 'huang', '荒': 'huang', '慌': 'huang', '灰': 'hui', '挥': 'hui', '辉': 'hui', '回': 'hui', '悔': 'hui', '慧': 'hui', '卉': 'hui', '汇': 'hui', '会': 'hui', '惠': 'hui', '昏': 'hun', '婚': 'hun', '魂': 'hun', '混': 'hun', '活': 'huo', '火': 'huo', '获': 'huo', '或': 'huo', '霍': 'huo',
+            // J
+            '吉': 'ji', '级': 'ji', '即': 'ji', '极': 'ji', '急': 'ji', '疾': 'ji', '集': 'ji', '籍': 'ji', '季': 'ji', '济': 'ji', '寄': 'ji', '记': 'ji', '既': 'ji', '继': 'ji', '纪': 'ji', '技': 'ji', '际': 'ji', '剂': 'ji', '济': 'ji', '加': 'jia', '嘉': 'jia', '家': 'jia', '贾': 'jia', '甲': 'jia', '假': 'jia', '价': 'jia', '架': 'jia', '驾': 'jia', '嫁': 'jia', '尖': 'jian', '坚': 'jian', '肩': 'jian', '兼': 'jian', '间': 'jian', '艰': 'jian', '监': 'jian', '煎': 'jian', '剪': 'jian', '检': 'jian', '简': 'jian', '建': 'jian', '箭': 'jian', '件': 'jian', '健': 'jian', '荐': 'jian', '江': 'jiang', '姜': 'jiang', '将': 'jiang', '浆': 'jiang', '降': 'jiang', '交': 'jiao', '郊': 'jiao', '娇': 'jiao', '浇': 'jiao', '骄': 'jiao', '胶': 'jiao', '焦': 'jiao', '角': 'jiao', '缴': 'jiao', '教': 'jiao', '轿': 'jiao', '较': 'jiao', '叫': 'jiao', '揭': 'jie', '接': 'jie', '节': 'jie', '洁': 'jie', '结': 'jie', '解': 'jie', '介': 'jie', '戒': 'jie', '界': 'jie', '借': 'jie', '今': 'jin', '金': 'jin', '津': 'jin', '斤': 'jin', '近': 'jin', '进': 'jin', '晋': 'jin', '浸': 'jin', '尽': 'jin', '禁': 'jin', '京': 'jing', '经': 'jing', '精': 'jing', '井': 'jing', '景': 'jing', '颈': 'jing', '静': 'jing', '镜': 'jing', '径': 'jing', '竟': 'jing', '敬': 'jing', '靖': 'jing', '究': 'jiu', '揪': 'jiu', '纠': 'jiu', '九': 'jiu', '久': 'jiu', '酒': 'jiu', '旧': 'jiu', '救': 'jiu', '就': 'jiu', '居': 'ju', '局': 'ju', '举': 'ju', '巨': 'ju', '拒': 'ju', '距': 'ju', '具': 'ju', '俱': 'ju', '句': 'ju', '剧': 'ju', '据': 'ju', '锯': 'ju', '聚': 'ju', '卷': 'juan', '决': 'jue', '觉': 'jue', '绝': 'jue', '军': 'jun', '君': 'jun', '均': 'jun', '钧': 'jun', '峻': 'jun', '俊': 'jun',
+            // K
+            '开': 'kai', '凯': 'kai', '慨': 'kai', '堪': 'kan', '坎': 'kan', '康': 'kang', '抗': 'kang', '考': 'kao', '靠': 'kao', '科': 'ke', '可': 'ke', '克': 'ke', '刻': 'ke', '客': 'ke', '肯': 'ken', '空': 'kong', '孔': 'kong', '恐': 'kong', '控': 'kong', '口': 'kou', '扣': 'kou', '枯': 'ku', '哭': 'ku', '苦': 'ku', '库': 'ku', '裤': 'ku', '酷': 'ku', '夸': 'kua', '垮': 'kua', '跨': 'kua', '快': 'kuai', '块': 'kuai', '宽': 'kuan', '款': 'kuan', '狂': 'kuang', '况': 'kuang', '亏': 'kui', '盔': 'kui', '窥': 'kui', '葵': 'kui', '奎': 'kui', '愧': 'kui', '溃': 'kui', '昆': 'kun', '捆': 'kun', '困': 'kun', '括': 'kuo', '阔': 'kuo',
+            // L
+            '拉': 'la', '喇': 'la', '腊': 'la', '辣': 'la', '来': 'lai', '莱': 'lai', '赖': 'lai', '兰': 'lan', '蓝': 'lan', '拦': 'lan', '栏': 'lan', '览': 'lan', '滥': 'lan', '郎': 'lang', '朗': 'lang', '浪': 'lang', '劳': 'lao', '牢': 'lao', '老': 'lao', '姥': 'lao', '乐': 'le', '雷': 'lei', '磊': 'lei', '累': 'lei', '冷': 'leng', '离': 'li', '梨': 'li', '犁': 'li', '黎': 'li', '礼': 'li', '里': 'li', '理': 'li', '李': 'li', '立': 'li', '厉': 'li', '历': 'li', '利': 'li', '例': 'li', '列': 'li', '烈': 'li', '劣': 'li', '猎': 'lie', '林': 'lin', '临': 'lin', '邻': 'lin', '鳞': 'lin', '淋': 'lin', '凛': 'lin', '吝': 'lin', '赁': 'lin', '玲': 'ling', '铃': 'ling', '陵': 'ling', '零': 'ling', '龄': 'ling', '领': 'ling', '另': 'ling', '溜': 'liu', '刘': 'liu', '流': 'liu', '留': 'liu', '柳': 'liu', '六': 'liu', '龙': 'long', '隆': 'long', '娄': 'lou', '楼': 'lou', '漏': 'lou', '卢': 'lu', '芦': 'lu', '卢': 'lu', '炉': 'lu', '鲁': 'lu', '陆': 'lu', '录': 'lu', '鹿': 'lu', '路': 'lu', '露': 'lu', '旅': 'lv', '屡': 'lv', '律': 'lv', '虑': 'lv', '绿': 'lv', '率': 'lv', '卵': 'luan', '乱': 'luan', '略': 'lue', '轮': 'lun', '论': 'lun', '罗': 'luo', '洛': 'luo', '骆': 'luo', '落': 'luo',
+            // M
+            '麻': 'ma', '马': 'ma', '码': 'ma', '骂': 'ma', '埋': 'mai', '买': 'mai', '卖': 'mai', '迈': 'mai', '蛮': 'man', '满': 'man', '漫': 'man', '芒': 'mang', '忙': 'mang', '盲': 'mang', '茫': 'mang', '毛': 'mao', '矛': 'mao', '卯': 'mao', '茂': 'mao', '冒': 'mao', '貌': 'mao', '么': 'me', '没': 'mei', '眉': 'mei', '梅': 'mei', '每': 'mei', '美': 'mei', '妹': 'mei', '门': 'men', '闷': 'men', '们': 'men', '蒙': 'meng', '萌': 'meng', '盟': 'meng', '猛': 'meng', '孟': 'meng', '米': 'mi', '密': 'mi', '蜜': 'mi', '眠': 'mian', '绵': 'mian', '免': 'mian', '面': 'mian', '苗': 'miao', '描': 'miao', '秒': 'miao', '妙': 'miao', '民': 'min', '敏': 'min', '明': 'ming', '鸣': 'ming', '名': 'ming', '命': 'ming', '摸': 'mo', '磨': 'mo', '魔': 'mo', '末': 'mo', '莫': 'mo', '墨': 'mo', '默': 'mo', '母': 'mu', '木': 'mu', '目': 'mu', '牧': 'mu', '墓': 'mu', '幕': 'mu', '慕': 'mu', '穆': 'mu',
+            // N
+            '拿': 'na', '哪': 'na', '那': 'na', '纳': 'na', '乃': 'nai', '奶': 'nai', '耐': 'nai', '南': 'nan', '男': 'nan', '难': 'nan', '囊': 'nang', '脑': 'nao', '闹': 'nao', '呢': 'ne', '嫩': 'nen', '能': 'neng', '尼': 'ni', '泥': 'ni', '倪': 'ni', '尼': 'ni', '你': 'ni', '逆': 'ni', '溺': 'ni', '年': 'nian', '念': 'nian', '娘': 'niang', '酿': 'niang', '鸟': 'niao', '捏': 'nie', '聂': 'nie', '宁': 'ning', '拧': 'ning', '牛': 'niu', '农': 'nong', '浓': 'nong', '弄': 'nong', '奴': 'nu', '努': 'nu', '怒': 'nu', '女': 'nv', '暖': 'nuan', '诺': 'nuo',
+            // O
+            '哦': 'o', '欧': 'ou', '偶': 'ou', '藕': 'ou',
+            // P
+            '趴': 'pa', '爬': 'pa', '怕': 'pa', '拍': 'pai', '排': 'pai', '牌': 'pai', '派': 'pai', '攀': 'pan', '潘': 'pan', '判': 'pan', '盼': 'pan', '盘': 'pan', '庞': 'pang', '旁': 'pang', '跑': 'pao', '泡': 'pao', '炮': 'pao', '佩': 'pei', '配': 'pei', '喷': 'pen', '朋': 'peng', '棚': 'peng', '捧': 'peng', '碰': 'peng', '批': 'pi', '披': 'pi', '疲': 'pi', '皮': 'pi', '匹': 'pi', '僻': 'pi', '偏': 'pian', '片': 'pian', '骗': 'pian', '飘': 'piao', '票': 'piao', '撇': 'pie', '拼': 'pin', '频': 'pin', '贫': 'pin', '品': 'pin', '聘': 'pin', '平': 'ping', '凭': 'ping', '瓶': 'ping', '评': 'ping', '坡': 'po', '泼': 'po', '破': 'po', '迫': 'po', '铺': 'pu', '葡': 'pu', '蒲': 'pu', '普': 'pu', '谱': 'pu', '瀑': 'pu',
+            // Q
+            '七': 'qi', '妻': 'qi', '戚': 'qi', '期': 'qi', '欺': 'qi', '栖': 'qi', '漆': 'qi', '齐': 'qi', '奇': 'qi', '其': 'qi', '棋': 'qi', '歧': 'qi', '崎': 'qi', '骑': 'qi', '启': 'qi', '起': 'qi', '气': 'qi', '弃': 'qi', '泣': 'qi', '契': 'qi', '砌': 'qi', '器': 'qi', '千': 'qian', '迁': 'qian', '签': 'qian', '前': 'qian', '钱': 'qian', '钳': 'qian', '潜': 'qian', '浅': 'qian', '遣': 'qian', '欠': 'qian', '枪': 'qiang', '强': 'qiang', '墙': 'qiang', '抢': 'qiang', '腔': 'qiang', '羌': 'qiang', '悄': 'qiao', '敲': 'qiao', '乔': 'qiao', '侨': 'qiao', '桥': 'qiao', '瞧': 'qiao', '切': 'qie', '茄': 'qie', '且': 'qie', '窃': 'qie', '亲': 'qin', '钦': 'qin', '侵': 'qin', '秦': 'qin', '琴': 'qin', '勤': 'qin', '青': 'qing', '轻': 'qing', '清': 'qing', '晴': 'qing', '情': 'qing', '顷': 'qing', '请': 'qing', '庆': 'qing', '琼': 'qiong', '穷': 'qiong', '秋': 'qiu', '丘': 'qiu', '邱': 'qiu', '求': 'qiu', '球': 'qiu', '区': 'qu', '曲': 'qu', '屈': 'qu', '驱': 'qu', '渠': 'qu', '取': 'qu', '娶': 'qu', '趣': 'qu', '去': 'qu', '圈': 'quan', '全': 'quan', '权': 'quan', '泉': 'quan', '拳': 'quan', '犬': 'quan', '劝': 'quan', '缺': 'que', '却': 'que', '鹊': 'que', '确': 'que', '裙': 'qun', '群': 'qun',
+            // R
+            '然': 'ran', '燃': 'ran', '冉': 'ran', '壤': 'rang', '嚷': 'rang', '让': 'rang', '饶': 'rao', '扰': 'rao', '绕': 'rao', '惹': 're', '热': 're', '人': 'ren', '忍': 'ren', '任': 'ren', '刃': 'ren', '认': 'ren', '仍': 'reng', '日': 'ri', '容': 'rong', '荣': 'rong', '融': 'rong', '绒': 'rong', '冗': 'rong', '柔': 'rou', '肉': 'rou', '如': 'ru', '儒': 'ru', '乳': 'ru', '入': 'ru', '褥': 'ru', '软': 'ruan', '阮': 'ruan', '瑞': 'rui', '锐': 'rui', '闰': 'run', '若': 'ruo',
+            // S
+            '撒': 'sa', '萨': 'sa', '塞': 'sai', '三': 'san', '伞': 'san', '散': 'san', '桑': 'sang', '丧': 'sang', '扫': 'sao', '嫂': 'sao', '瑟': 'se', '色': 'se', '森': 'sen', '僧': 'seng', '沙': 'sha', '杀': 'sha', '刹': 'sha', '莎': 'sha', '纱': 'sha', '傻': 'sha', '煞': 'sha', '山': 'shan', '删': 'shan', '闪': 'shan', '陕': 'shan', '善': 'shan', '扇': 'shan', '伤': 'shang', '商': 'shang', '赏': 'shang', '上': 'shang', '尚': 'shang', '裳': 'shang', '烧': 'shao', '勺': 'shao', '韶': 'shao', '少': 'shao', '哨': 'shao', '邵': 'shao', '舍': 'she', '舌': 'she', '蛇': 'she', '设': 'she', '社': 'she', '射': 'she', '涉': 'she', '摄': 'she', '申': 'shen', '伸': 'shen', '身': 'shen', '深': 'shen', '神': 'shen', '沈': 'shen', '审': 'shen', '甚': 'shen', '慎': 'shen', '生': 'sheng', '声': 'sheng', '升': 'sheng', '绳': 'sheng', '省': 'sheng', '盛': 'sheng', '剩': 'sheng', '圣': 'sheng', '师': 'shi', '诗': 'shi', '施': 'shi', '狮': 'shi', '湿': 'shi', '十': 'shi', '石': 'shi', '时': 'shi', '识': 'shi', '实': 'shi', '史': 'shi', '使': 'shi', '始': 'shi', '士': 'shi', '氏': 'shi', '世': 'shi', '事': 'shi', '势': 'shi', '适': 'shi', '室': 'shi', '视': 'shi', '饰': 'shi', '是': 'shi', '市': 'shi', '试': 'shi', '首': 'shou', '手': 'shou', '守': 'shou', '受': 'shou', '寿': 'shou', '兽': 'shou', '书': 'shu', '舒': 'shu', '疏': 'shu', '输': 'shu', '叔': 'shu', '淑': 'shu', '殊': 'shu', '梳': 'shu', '蔬': 'shu', '术': 'shu', '述': 'shu', '树': 'shu', '束': 'shu', '数': 'shu', '双': 'shuang', '霜': 'shuang', '爽': 'shuang', '谁': 'shui', '水': 'shui', '睡': 'shui', '税': 'shui', '顺': 'shun', '瞬': 'shun', '说': 'shuo', '硕': 'shuo', '朔': 'shuo', '斯': 'si', '司': 'si', '私': 'si', '思': 'si', '丝': 'si', '死': 'si', '寺': 'si', '四': 'si', '似': 'si', '饲': 'si', '松': 'song', '耸': 'song', '颂': 'song', '送': 'song', '宋': 'song', '苏': 'su', '速': 'su', '素': 'su', '诉': 'su', '肃': 'su', '粟': 'su', '塑': 'su', '宿': 'su', '俗': 'su', '虽': 'sui', '随': 'sui', '绥': 'sui', '碎': 'sui', '岁': 'sui', '穗': 'sui', '遂': 'sui', '孙': 'sun', '损': 'sun', '笋': 'sun', '梭': 'suo', '锁': 'suo', '所': 'suo',
+            // T
+            '他': 'ta', '她': 'ta', '它': 'ta', '塔': 'ta', '塌': 'ta', '台': 'tai', '太': 'tai', '态': 'tai', '泰': 'tai', '谈': 'tan', '弹': 'tan', '坦': 'tan', '探': 'tan', '碳': 'tan', '汤': 'tang', '唐': 'tang', '堂': 'tang', '糖': 'tang', '躺': 'tang', '趟': 'tang', '涛': 'tao', '滔': 'tao', '逃': 'tao', '桃': 'tao', '陶': 'tao', '讨': 'tao', '套': 'tao', '特': 'te', '藤': 'teng', '腾': 'teng', '疼': 'teng', '梯': 'ti', '提': 'ti', '题': 'ti', '蹄': 'ti', '体': 'ti', '替': 'ti', '天': 'tian', '田': 'tian', '填': 'tian', '甜': 'tian', '舔': 'tian', '挑': 'tiao', '条': 'tiao', '跳': 'tiao', '铁': 'tie', '厅': 'ting', '听': 'ting', '庭': 'ting', '亭': 'ting', '停': 'ting', '挺': 'ting', '通': 'tong', '同': 'tong', '桐': 'tong', '铜': 'tong', '童': 'tong', '桶': 'tong', '筒': 'tong', '统': 'tong', '偷': 'tou', '头': 'tou', '投': 'tou', '透': 'tou', '突': 'tu', '图': 'tu', '途': 'tu', '涂': 'tu', '土': 'tu', '吐': 'tu', '兔': 'tu', '团': 'tuan', '推': 'tui', '退': 'tui', '腿': 'tui', '吞': 'tun', '屯': 'tun', '臀': 'tun', '拖': 'tuo', '托': 'tuo', '脱': 'tuo', '妥': 'tuo', '拓': 'tuo',
+            // W
+            '挖': 'wa', '瓦': 'wa', '外': 'wai', '歪': 'wai', '弯': 'wan', '湾': 'wan', '玩': 'wan', '完': 'wan', '晚': 'wan', '挽': 'wan', '万': 'wan', '汪': 'wang', '王': 'wang', '网': 'wang', '往': 'wang', '望': 'wang', '忘': 'wang', '威': 'wei', '微': 'wei', '危': 'wei', '韦': 'wei', '为': 'wei', '围': 'wei', '违': 'wei', '唯': 'wei', '维': 'wei', '伪': 'wei', '尾': 'wei', '委': 'wei', '伟': 'wei', '味': 'wei', '畏': 'wei', '胃': 'wei', '位': 'wei', '卫': 'wei', '温': 'wen', '文': 'wen', '闻': 'wen', '稳': 'wen', '问': 'wen', '翁': 'weng', '嗡': 'weng', '瓮': 'weng', '乌': 'wu', '无': 'wu', '五': 'wu', '伍': 'wu', '武': 'wu', '舞': 'wu', '雾': 'wu', '物': 'wu', '误': 'wu', '悟': 'wu',
+            // X
+            '西': 'xi', '吸': 'xi', '希': 'xi', '析': 'xi', '昔': 'xi', '惜': 'xi', '息': 'xi', '溪': 'xi', '稀': 'xi', '锡': 'xi', '习': 'xi', '席': 'xi', '洗': 'xi', '喜': 'xi', '戏': 'xi', '系': 'xi', '细': 'xi', '虾': 'xia', '瞎': 'xia', '峡': 'xia', '霞': 'xia', '下': 'xia', '夏': 'xia', '厦': 'xia', '仙': 'xian', '先': 'xian', '鲜': 'xian', '弦': 'xian', '闲': 'xian', '贤': 'xian', '显': 'xian', '险': 'xian', '县': 'xian', '现': 'xian', '献': 'xian', '线': 'xian', '相': 'xiang', '香': 'xiang', '厢': 'xiang', '箱': 'xiang', '襄': 'xiang', '镶': 'xiang', '翔': 'xiang', '祥': 'xiang', '想': 'xiang', '响': 'xiang', '享': 'xiang', '向': 'xiang', '项': 'xiang', '象': 'xiang', '萧': 'xiao', '消': 'xiao', '宵': 'xiao', '销': 'xiao', '晓': 'xiao', '小': 'xiao', '孝': 'xiao', '校': 'xiao', '笑': 'xiao', '效': 'xiao', '楔': 'xie', '些': 'xie', '歇': 'xie', '协': 'xie', '邪': 'xie', '斜': 'xie', '携': 'xie', '写': 'xie', '血': 'xie', '泄': 'xie', '谢': 'xie', '心': 'xin', '辛': 'xin', '欣': 'xin', '新': 'xin', '信': 'xin', '兴': 'xing', '星': 'xing', '行': 'xing', '形': 'xing', '刑': 'xing', '型': 'xing', '杏': 'xing', '幸': 'xing', '凶': 'xiong', '胸': 'xiong', '雄': 'xiong', '熊': 'xiong', '休': 'xiu', '修': 'xiu', '羞': 'xiu', '秀': 'xiu', '绣': 'xiu', '袖': 'xiu', '须': 'xu', '虚': 'xu', '徐': 'xu', '许': 'xu', '续': 'xu', '序': 'xu', '叙': 'xu', '旭': 'xu', '畜': 'xu', '蓄': 'xu', '轩': 'xuan', '宣': 'xuan', '悬': 'xuan', '旋': 'xuan', '选': 'xuan', '眩': 'xuan', '薛': 'xue', '学': 'xue', '雪': 'xue', '血': 'xue', '寻': 'xun', '巡': 'xun', '训': 'xun', '讯': 'xun', '迅': 'xun', '压': 'ya',
+            // Y
+            '鸭': 'ya', '牙': 'ya', '芽': 'ya', '雅': 'ya', '亚': 'ya', '焉': 'yan', '烟': 'yan', '言': 'yan', '严': 'yan', '妍': 'yan', '岩': 'yan', '沿': 'yan', '炎': 'yan', '盐': 'yan', '阎': 'yan', '颜': 'yan', '延': 'yan', '言': 'yan', '演': 'yan', '验': 'yan', '雁': 'yan', '燕': 'yan', '央': 'yang', '扬': 'yang', '羊': 'yang', '洋': 'yang', '阳': 'yang', '杨': 'yang', '仰': 'yang', '养': 'yang', '样': 'yang', '漾': 'yang', '尧': 'yao', '姚': 'yao', '摇': 'yao', '遥': 'yao', '窑': 'yao', '谣': 'yao', '咬': 'yao', '药': 'yao', '要': 'yao', '耀': 'yao', '耶': 'ye', '也': 'ye', '业': 'ye', '叶': 'ye', '页': 'ye', '夜': 'ye', '一': 'yi', '伊': 'yi', '衣': 'yi', '医': 'yi', '依': 'yi', '仪': 'yi', '宜': 'yi', '怡': 'yi', '宜': 'yi', '移': 'yi', '遗': 'yi', '疑': 'yi', '乙': 'yi', '已': 'yi', '以': 'yi', '艺': 'yi', '易': 'yi', '忆': 'yi', '亿': 'yi', '义': 'yi', '议': 'yi', '亦': 'yi', '异': 'yi', '役': 'yi', '译': 'yi', '毅': 'yi', '翼': 'yi', '因': 'yin', '阴': 'yin', '音': 'yin', '银': 'yin', '饮': 'yin', '引': 'yin', '隐': 'yin', '印': 'yin', '英': 'ying', '樱': 'ying', '婴': 'ying', '鹰': 'ying', '应': 'ying', '缨': 'ying', '莹': 'ying', '营': 'ying', '影': 'ying', '硬': 'ying', '永': 'yong', '咏': 'yong', '泳': 'yong', '勇': 'yong', '涌': 'yong', '用': 'yong', '优': 'you', '忧': 'you', '尤': 'you', '由': 'you', '油': 'you', '游': 'you', '友': 'you', '有': 'you', '右': 'you', '幼': 'you', '诱': 'you', '又': 'you', '余': 'yu', '于': 'yu', '与': 'yu', '予': 'yu', '鱼': 'yu', '渔': 'yu', '娱': 'yu', '雨': 'yu', '语': 'yu', '玉': 'yu', '育': 'yu', '域': 'yu', '郁': 'yu', '遇': 'yu', '喻': 'yu', '御': 'yu', '愈': 'yu', '欲': 'yu', '狱': 'yu', '元': 'yuan', '园': 'yuan', '原': 'yuan', '圆': 'yuan', '员': 'yuan', '源': 'yuan', '远': 'yuan', '愿': 'yuan', '怨': 'yuan', '院': 'yuan', '约': 'yue', '越': 'yue', '跃': 'yue', '月': 'yue', '悦': 'yue', '云': 'yun', '匀': 'yun', '允': 'yun', '运': 'yun', '蕴': 'yun', '晕': 'yun', '韵': 'yun',
+            // Z
+            '杂': 'za', '砸': 'za', '载': 'zai', '再': 'zai', '在': 'zai', '赞': 'zan', '暂': 'zan', '藏': 'zang', '脏': 'zang', '遭': 'zao', '糟': 'zao', '早': 'zao', '枣': 'zao', '澡': 'zao', '造': 'zao', '灶': 'zao', '燥': 'zao', '责': 'ze', '择': 'ze', '则': 'ze', '泽': 'ze', '曾': 'zeng', '增': 'zeng', '憎': 'zeng', '扎': 'zha', '渣': 'zha', '查': 'zha', '闸': 'zha', '眨': 'zha', '乍': 'zha', '诈': 'zha', '榨': 'zha', '窄': 'zhai', '债': 'zhai', '占': 'zhan', '战': 'zhan', '站': 'zhan', '湛': 'zhan', '绽': 'zhan', '樟': 'zhang', '章': 'zhang', '张': 'zhang', '涨': 'zhang', '掌': 'zhang', '丈': 'zhang', '杖': 'zhang', '帐': 'zhang', '胀': 'zhang', '障': 'zhang', '招': 'zhao', '找': 'zhao', '沼': 'zhao', '赵': 'zhao', '照': 'zhao', '罩': 'zhao', '兆': 'zhao', '遮': 'zhe', '折': 'zhe', '哲': 'zhe', '者': 'zhe', '这': 'zhe', '浙': 'zhe', '珍': 'zhen', '真': 'zhen', '针': 'zhen', '侦': 'zhen', '枕': 'zhen', '振': 'zhen', '震': 'zhen', '镇': 'zhen', '争': 'zheng', '征': 'zheng', '挣': 'zheng', '睁': 'zheng', '筝': 'zheng', '整': 'zheng', '正': 'zheng', '证': 'zheng', '郑': 'zheng', '枝': 'zhi', '知': 'zhi', '之': 'zhi', '芝': 'zhi', '支': 'zhi', '汁': 'zhi', '只': 'zhi', '织': 'zhi', '职': 'zhi', '直': 'zhi', '植': 'zhi', '值': 'zhi', '置': 'zhi', '志': 'zhi', '治': 'zhi', '致': 'zhi', '智': 'zhi', '滞': 'zhi', '中': 'zhong', '忠': 'zhong', '钟': 'zhong', '终': 'zhong', '种': 'zhong', '重': 'zhong', '众': 'zhong', '周': 'zhou', '州': 'zhou', '舟': 'zhou', '周': 'zhou', '咒': 'zhou', '宙': 'zhou', '昼': 'zhou', '珠': 'zhu', '朱': 'zhu', '株': 'zhu', '诸': 'zhu', '猪': 'zhu', '煮': 'zhu', '主': 'zhu', '住': 'zhu', '注': 'zhu', '祝': 'zhu', '著': 'zhu', '筑': 'zhu', '铸': 'zhu', '逐': 'zhu', '烛': 'zhu', '竹': 'zhu', '抓': 'zhua', '爪': 'zhua', '专': 'zhuan', '砖': 'zhuan', '传': 'zhuan', '转': 'zhuan', '赚': 'zhuan', '撰': 'zhuan', '庄': 'zhuang', '装': 'zhuang', '撞': 'zhuang', '壮': 'zhuang', '状': 'zhuang', '准': 'zhun', '捉': 'zhuo', '拙': 'zhuo', '卓': 'zhuo', '桌': 'zhuo', '浊': 'zhuo', '琢': 'zhuo', '资': 'zi', '姿': 'zi', '滋': 'zi', '子': 'zi', '自': 'zi', '字': 'zi', '宗': 'zong', '棕': 'zong', '踪': 'zong', '总': 'zong', '纵': 'zong', '走': 'zou', '奏': 'zou', '租': 'zu', '足': 'zu', '卒': 'zu', '族': 'zu', '祖': 'zu', '阻': 'zu', '组': 'zu', '钻': 'zuan', '纂': 'zuan', '醉': 'zui', '最': 'zui', '尊': 'zun', '遵': 'zun', '昨': 'zuo', '左': 'zuo', '佐': 'zuo', '作': 'zuo', '坐': 'zuo', '座': 'zuo'
+        };
+
+        // 从英文获取中文名称（反向映射）
+        function getChineseName(englishName) {
+            if (!englishName) return '';
+            const lowerName = englishName.toLowerCase().trim();
+            
+            // 先尝试匹配国家代码
+            for (const [chinese, values] of Object.entries(CHINESE_TO_ENGLISH)) {
+                if (values.some(v => v.toLowerCase() === lowerName || v === englishName)) {
+                    return chinese;
+                }
+            }
+            return '';
+        }
+
+        // 中文转拼音函数
+        function chineseToPinyin(chineseStr) {
+            let pinyin = '';
+            for (let i = 0; i < chineseStr.length; i++) {
+                const char = chineseStr[i];
+                if (CHINESE_PINYIN[char]) {
+                    pinyin += CHINESE_PINYIN[char];
+                } else {
+                    // 如果不在映射表中，保留原字符
+                    pinyin += char;
+                }
+            }
+            return pinyin.toLowerCase();
+        }
+
+        // 中文到英文的映射表（城市和国家）
+        const CHINESE_TO_ENGLISH = {
+            // 国家
+            '中国': ['CN', 'China'],
+            '美国': ['US', 'United States', 'America'],
+            '日本': ['JP', 'Japan'],
+            '韩国': ['KR', 'Korea', 'South Korea'],
+            '泰国': ['TH', 'Thailand'],
+            '新加坡': ['SG', 'Singapore'],
+            '马来西亚': ['MY', 'Malaysia'],
+            '印度尼西亚': ['ID', 'Indonesia'],
+            '越南': ['VN', 'Vietnam'],
+            '菲律宾': ['PH', 'Philippines'],
+            '印度': ['IN', 'India'],
+            '阿联酋': ['AE', 'UAE', 'United Arab Emirates'],
+            '英国': ['GB', 'UK', 'United Kingdom'],
+            '法国': ['FR', 'France'],
+            '德国': ['DE', 'Germany'],
+            '意大利': ['IT', 'Italy'],
+            '西班牙': ['ES', 'Spain'],
+            '荷兰': ['NL', 'Netherlands'],
+            '澳大利亚': ['AU', 'Australia'],
+            '新西兰': ['NZ', 'New Zealand'],
+            '加拿大': ['CA', 'Canada'],
+            '墨西哥': ['MX', 'Mexico'],
+            '巴西': ['BR', 'Brazil'],
+            '阿根廷': ['AR', 'Argentina'],
+            '埃及': ['EG', 'Egypt'],
+            '南非': ['ZA', 'South Africa'],
+            '俄罗斯': ['RU', 'Russia'],
+            '土耳其': ['TR', 'Turkey'],
+            '沙特阿拉伯': ['SA', 'Saudi Arabia'],
+            '以色列': ['IL', 'Israel'],
+            '伊朗': ['IR', 'Iran'],
+            '巴基斯坦': ['PK', 'Pakistan'],
+            '孟加拉国': ['BD', 'Bangladesh'],
+            '尼泊尔': ['NP', 'Nepal'],
+            '斯里兰卡': ['LK', 'Sri Lanka'],
+            '马尔代夫': ['MV', 'Maldives'],
+            '柬埔寨': ['KH', 'Cambodia'],
+            '老挝': ['LA', 'Laos'],
+            '缅甸': ['MM', 'Myanmar', 'Burma'],
+            '文莱': ['BN', 'Brunei'],
+            '东帝汶': ['TL', 'Timor-Leste'],
+            '蒙古': ['MN', 'Mongolia'],
+            '哈萨克斯坦': ['KZ', 'Kazakhstan'],
+            '乌兹别克斯坦': ['UZ', 'Uzbekistan'],
+            '塔吉克斯坦': ['TJ', 'Tajikistan'],
+            '吉尔吉斯斯坦': ['KG', 'Kyrgyzstan'],
+            '土库曼斯坦': ['TM', 'Turkmenistan'],
+            '格鲁吉亚': ['GE', 'Georgia'],
+            '亚美尼亚': ['AM', 'Armenia'],
+            '阿塞拜疆': ['AZ', 'Azerbaijan'],
+            '乌克兰': ['UA', 'Ukraine'],
+            '白俄罗斯': ['BY', 'Belarus'],
+            '波兰': ['PL', 'Poland'],
+            '捷克': ['CZ', 'Czech'],
+            '匈牙利': ['HU', 'Hungary'],
+            '奥地利': ['AT', 'Austria'],
+            '瑞士': ['CH', 'Switzerland'],
+            '瑞典': ['SE', 'Sweden'],
+            '挪威': ['NO', 'Norway'],
+            '丹麦': ['DK', 'Denmark'],
+            '芬兰': ['FI', 'Finland'],
+            '冰岛': ['IS', 'Iceland'],
+            '爱尔兰': ['IE', 'Ireland'],
+            '葡萄牙': ['PT', 'Portugal'],
+            '希腊': ['GR', 'Greece'],
+            '克罗地亚': ['HR', 'Croatia'],
+            '塞尔维亚': ['RS', 'Serbia'],
+            '保加利亚': ['BG', 'Bulgaria'],
+            '罗马尼亚': ['RO', 'Romania'],
+            '比利时': ['BE', 'Belgium'],
+            '卢森堡': ['LU', 'Luxembourg'],
+            '爱尔兰': ['IE', 'Ireland'],
+            '马耳他': ['MT', 'Malta'],
+            '塞浦路斯': ['CY', 'Cyprus'],
+            '摩洛哥': ['MA', 'Morocco'],
+            '突尼斯': ['TN', 'Tunisia'],
+            '阿尔及利亚': ['DZ', 'Algeria'],
+            '利比亚': ['LY', 'Libya'],
+            '苏丹': ['SD', 'Sudan'],
+            '埃塞俄比亚': ['ET', 'Ethiopia'],
+            '肯尼亚': ['KE', 'Kenya'],
+            '坦桑尼亚': ['TZ', 'Tanzania'],
+            '乌干达': ['UG', 'Uganda'],
+            '赞比亚': ['ZM', 'Zambia'],
+            '津巴布韦': ['ZW', 'Zimbabwe'],
+            '莫桑比克': ['MZ', 'Mozambique'],
+            '马达加斯加': ['MG', 'Madagascar'],
+            '尼日利亚': ['NG', 'Nigeria'],
+            '加纳': ['GH', 'Ghana'],
+            '科特迪瓦': ['CI', 'Cote dIvoire', 'Ivory Coast'],
+            '塞内加尔': ['SN', 'Senegal'],
+            '毛里求斯': ['MU', 'Mauritius'],
+            '塞舌尔': ['SC', 'Seychelles'],
+            '澳大利亚': ['AU', 'Australia'],
+            '斐济': ['FJ', 'Fiji'],
+            '巴布亚新几内亚': ['PG', 'Papua New Guinea'],
+            '所罗门群岛': ['SB', 'Solomon Islands'],
+            '瓦努阿图': ['VU', 'Vanuatu'],
+            '萨摩亚': ['WS', 'Samoa'],
+            '汤加': ['TO', 'Tonga'],
+            '库克群岛': ['CK', 'Cook Islands'],
+            '纽埃': ['NU', 'Niue'],
+            '美国': ['US', 'United States'],
+            '墨西哥': ['MX', 'Mexico'],
+            '危地马拉': ['GT', 'Guatemala'],
+            '伯利兹': ['BZ', 'Belize'],
+            '洪都拉斯': ['HN', 'Honduras'],
+            '萨尔瓦多': ['SV', 'El Salvador'],
+            '尼加拉瓜': ['NI', 'Nicaragua'],
+            '哥斯达黎加': ['CR', 'Costa Rica'],
+            '巴拿马': ['PA', 'Panama'],
+            '古巴': ['CU', 'Cuba'],
+            '牙买加': ['JM', 'Jamaica'],
+            '海地': ['HT', 'Haiti'],
+            '多米尼加': ['DO', 'Dominican Republic'],
+            '波多黎各': ['PR', 'Puerto Rico'],
+            '巴哈马': ['BS', 'Bahamas'],
+            '巴巴多斯': ['BB', 'Barbados'],
+            '格林纳达': ['GD', 'Grenada'],
+            '特立尼达': ['TT', 'Trinidad and Tobago'],
+            '哥伦比亚': ['CO', 'Colombia'],
+            '委内瑞拉': ['VE', 'Venezuela'],
+            '厄瓜多尔': ['EC', 'Ecuador'],
+            '秘鲁': ['PE', 'Peru'],
+            '玻利维亚': ['BO', 'Bolivia'],
+            '智利': ['CL', 'Chile'],
+            '巴拉圭': ['PY', 'Paraguay'],
+            '乌拉圭': ['UY', 'Uruguay'],
+            '苏里南': ['SR', 'Suriname'],
+            '圭亚那': ['GY', 'Guyana'],
+            // 城市
+            '北京': ['Beijing', 'PEK', 'PKX'],
+            '上海': ['Shanghai', 'PVG', 'SHA'],
+            '广州': ['Guangzhou', 'CAN'],
+            '深圳': ['Shenzhen', 'SZX'],
+            '成都': ['Chengdu', 'CTU', 'TFU'],
+            '杭州': ['Hangzhou', 'HGH'],
+            '西安': ['Xian', 'SIA'],
+            '重庆': ['Chongqing', 'CKG'],
+            '昆明': ['Kunming', 'KMG'],
+            '南京': ['Nanjing', 'NKG'],
+            '武汉': ['Wuhan', 'WUH'],
+            '天津': ['Tianjin', 'TSN'],
+            '青岛': ['Qingdao', 'TAO'],
+            '厦门': ['Xiamen', 'XMN'],
+            '长沙': ['Changsha', 'CSX'],
+            '郑州': ['Zhengzhou', 'CGO'],
+            '沈阳': ['Shenyang', 'SHE'],
+            '大连': ['Dalian', 'DLC'],
+            '哈尔滨': ['Harbin', 'HRB'],
+            '长春': ['Changchun', 'CGQ'],
+            '济南': ['Jinan', 'TNA'],
+            '太原': ['Taiyuan', 'TYN'],
+            '石家庄': ['Shijiazhuang', 'SJW'],
+            '合肥': ['Hefei', 'HFE'],
+            '福州': ['Fuzhou', 'FOC'],
+            '南宁': ['Nanning', 'NNG'],
+            '贵阳': ['Guiyang', 'KWE'],
+            '兰州': ['Lanzhou', 'LHW'],
+            '乌鲁木齐': ['Urumqi', 'URC'],
+            '西宁': ['Xining', 'XNN'],
+            '银川': ['Yinchuan', 'INC'],
+            '呼和浩特': ['Hohhot', 'HET'],
+            '赤峰': ['Chifeng', 'AEQ', 'CIF'],
+            '南昌': ['Nanchang', 'KHN'],
+            '海口': ['Haikou', 'HAK'],
+            '三亚': ['Sanya', 'SYX'],
+            '澳门': ['Macau', 'Macao', 'MFM'],
+            '香港': ['Hong Kong', 'HKG'],
+            '台北': ['Taipei', 'TPE'],
+            '东京': ['Tokyo', 'NRT', 'HND'],
+            '大阪': ['Osaka', 'KIX', 'ITM'],
+            '京都': ['Kyoto'],
+            '神户': ['Kobe'],
+            '横滨': ['Yokohama'],
+            '首尔': ['Seoul', 'ICN', 'GMP'],
+            '釜山': ['Busan', 'PUS'],
+            '大邱': ['Daegu', 'TAE'],
+            '仁川': ['Incheon'],
+            '曼谷': ['Bangkok', 'BKK', 'DMK'],
+            '普吉': ['Phuket', 'HKT'],
+            '清迈': ['Chiang Mai', 'NX'],
+            '新加坡': ['Singapore', 'SIN'],
+            '吉隆坡': ['Kuala Lumpur', 'KUL', 'SZB'],
+            '槟城': ['Penang', 'PEN'],
+            '雅加达': ['Jakarta', 'CGK'],
+            '巴厘岛': ['Bali', 'DPS'],
+            '河内': ['Hanoi', 'HAN'],
+            '胡志明': ['Ho Chi Minh', 'SGN'],
+            '马尼拉': ['Manila', 'MNL'],
+            '宿务': ['Cebu', 'CEB'],
+            '孟买': ['Mumbai', 'BOM'],
+            '德里': ['Delhi', 'DEL'],
+            '加尔各答': ['Kolkata', 'CCU'],
+            '迪拜': ['Dubai', 'DXB', 'DWC'],
+            '阿布扎比': ['Abu Dhabi', 'AUH'],
+            '伦敦': ['London', 'LHR', 'LGW', 'STN', 'LTN', 'SEN', 'LCY'],
+            '巴黎': ['Paris', 'CDG', 'ORY'],
+            '法兰克福': ['Frankfurt', 'FRA'],
+            '慕尼黑': ['Munich', 'MUC'],
+            '柏林': ['Berlin', 'BER'],
+            '罗马': ['Rome', 'FCO', 'CIA'],
+            '米兰': ['Milan', 'MXP', 'LIN'],
+            '马德里': ['Madrid', 'MAD'],
+            '巴塞罗那': ['Barcelona', 'BCN'],
+            '阿姆斯特丹': ['Amsterdam', 'AMS'],
+            '鹿特丹': ['Rotterdam'],
+            '悉尼': ['Sydney', 'SYD'],
+            '墨尔本': ['Melbourne', 'MEL'],
+            '布里斯班': ['Brisbane', 'BNE'],
+            '珀斯': ['Perth', 'PER'],
+            '奥克兰': ['Auckland', 'AKL'],
+            '惠灵顿': ['Wellington', 'WLG'],
+            '基督城': ['Christchurch', 'CHC'],
+            '多伦多': ['Toronto', 'YYZ', 'YTZ'],
+            '温哥华': ['Vancouver', 'YVR'],
+            '蒙特利尔': ['Montreal', 'YUL'],
+            '卡尔加里': ['Calgary', 'YYC'],
+            '纽约': ['New York', 'JFK', 'LGA', 'EWR'],
+            '洛杉矶': ['Los Angeles', 'LAX'],
+            '芝加哥': ['Chicago', 'ORD', 'MDW'],
+            '旧金山': ['San Francisco', 'SFO'],
+            '西雅图': ['Seattle', 'SEA'],
+            '拉斯维加斯': ['Las Vegas', 'LAS'],
+            '迈阿密': ['Miami', 'MIA'],
+            '休斯顿': ['Houston', 'IAH', 'HOU'],
+            '达拉斯': ['Dallas', 'DFW', 'DAL'],
+            '亚特兰大': ['Atlanta', 'ATL'],
+            '波士顿': ['Boston', 'BOS'],
+            '费城': ['Philadelphia', 'PHL'],
+            '华盛顿': ['Washington', 'IAD', 'DCA'],
+            '凤凰城': ['Phoenix', 'PHX'],
+            '丹佛': ['Denver', 'DEN'],
+            '新奥尔良': ['New Orleans', 'MSY'],
+            '开罗': ['Cairo', 'CAI'],
+            '亚历山大': ['Alexandria', 'ALY'],
+            '开普敦': ['Cape Town', 'CPT'],
+            '约翰内斯堡': ['Johannesburg', 'JNB'],
+            '内罗毕': ['Nairobi', 'NBO'],
+            '拉各斯': ['Lagos', 'LOS'],
+            '莫斯科': ['Moscow', 'SVO', 'DME'],
+            '圣彼得堡': ['St Petersburg', 'LED'],
+            '伊斯坦布尔': ['Istanbul', 'IST', 'SAW'],
+            '安卡拉': ['Ankara', 'ESB'],
+            '迪拜': ['Dubai', 'DXB'],
+            '多哈': ['Doha', 'DOH'],
+            '利雅得': ['Riyadh', 'RUH'],
+            '吉达': ['Jeddah', 'JED'],
+            '特拉维夫': ['Tel Aviv', 'TLV'],
+            '耶路撒冷': ['Jerusalem'],
+            '大马士革': ['Damascus', 'DAM'],
+            '贝鲁特': ['Beirut', 'BEY'],
+            '科威特': ['Kuwait', 'KWI'],
+            '巴格达': ['Baghdad', 'BGW'],
+            '德黑兰': ['Tehran', 'IKA'],
+            '卡拉奇': ['Karachi', 'KHI'],
+            '拉合尔': ['Lahore', 'LHE'],
+            '伊斯兰堡': ['Islamabad', 'ISB'],
+            '达卡': ['Dhaka', 'DAC'],
+            '加德满都': ['Kathmandu', 'KTM'],
+            '科伦坡': ['Colombo', 'CMB'],
+            '马累': ['Male', 'MLE'],
+            '金边': ['Phnom Penh', 'PNH'],
+            '万象': ['Vientiane', 'VTE'],
+            '仰光': ['Yangon', 'RGN'],
+            '斯里巴加湾市': ['Bandar Seri Begawan', 'BWN'],
+            '帝力': ['Dili', 'DIL'],
+            '乌兰巴托': ['Ulaanbaatar', 'ULN'],
+            '阿拉木图': ['Almaty', 'ALA'],
+            '塔什干': ['Tashkent', 'TAS'],
+            '杜尚别': ['Dushanbe', 'DYU'],
+            '比什凯克': ['Bishkek', 'FRU'],
+            '阿什哈巴德': ['Ashgabat', 'ASB'],
+            '第比利斯': ['Tbilisi', 'TBS'],
+            '埃里温': ['Yerevan', 'EVN'],
+            '巴库': ['Baku', 'GYD'],
+            '基辅': ['Kyiv', 'KBP'],
+            '明斯克': ['Minsk', 'MSQ'],
+            '华沙': ['Warsaw', 'WAW'],
+            '布拉格': ['Prague', 'PRG'],
+            '布达佩斯': ['Budapest', 'BUD'],
+            '维也纳': ['Vienna', 'VIE'],
+            '日内瓦': ['Geneva', 'GVA'],
+            '苏黎世': ['Zurich', 'ZRH'],
+            '斯德哥尔摩': ['Stockholm', 'ARN'],
+            '奥斯陆': ['Oslo', 'OSL'],
+            '哥本哈根': ['Copenhagen', 'CPH'],
+            '赫尔辛基': ['Helsinki', 'HEL'],
+            '雷克雅未克': ['Reykjavik', 'KEF'],
+            '都柏林': ['Dublin', 'DUB'],
+            '里斯本': ['Lisbon', 'LIS'],
+            '波尔图': ['Porto', 'OPO'],
+            '雅典': ['Athens', 'ATH'],
+            '萨格勒布': ['Zagreb', 'ZAG'],
+            '贝尔格莱德': ['Belgrade', 'BEG'],
+            '索非亚': ['Sofia', 'SOF'],
+            '布加勒斯特': ['Bucharest', 'OTP'],
+            '布鲁塞尔': ['Brussels', 'BRU'],
+            '卢森堡市': ['Luxembourg', 'LUX'],
+            '瓦莱塔': ['Valletta', 'MLA'],
+            '尼科西亚': ['Nicosia', 'NIC'],
+            '拉巴特': ['Rabat', 'RBA'],
+            '突尼斯市': ['Tunis', 'TUN'],
+            '阿尔及尔': ['Algiers', 'ALG'],
+            '的黎波里': ['Tripoli', 'TIP'],
+            '喀土穆': ['Khartoum', 'KRT'],
+            '亚的斯亚贝巴': ['Addis Ababa', 'ADD'],
+            '蒙巴萨': ['Mombasa', 'MBA'],
+            '达累斯萨拉姆': ['Dar es Salaam', 'DAR'],
+            '坎帕拉': ['Kampala', 'EBB'],
+            '卢萨卡': ['Lusaka', 'LUN'],
+            '哈拉雷': ['Harare', 'HRE'],
+            '马普托': ['Maputo', 'MPM'],
+            '塔那那利佛': ['Antananarivo', 'TNR'],
+            '阿布贾': ['Abuja', 'ABV'],
+            '阿克拉': ['Accra', 'ACC'],
+            '阿比让': ['Abidjan', 'ABJ'],
+            '达喀尔': ['Dakar', 'DKR'],
+            '路易港': ['Port Louis', 'MRU'],
+            '维多利亚': ['Victoria', 'SEZ'],
+            '奥克兰': ['Auckland', 'AKL'],
+            '楠迪': ['Nadi', 'NAN'],
+            '莫尔兹比港': ['Port Moresby', 'POM'],
+            '霍尼亚拉': ['Honiara', 'HIR'],
+            '维拉港': ['Port Vila', 'VLI'],
+            '阿皮亚': ['Apia', 'APW'],
+            '努库阿洛法': ['Nuku Alofa', 'TBU'],
+            '阿瓦鲁阿': ['Avarua', 'RAR'],
+            '阿洛菲': ['Alofi', 'NIU'],
+            '芝加哥': ['Chicago', 'ORD'],
+            '达拉斯': ['Dallas', 'DFW'],
+            '拉斯维加斯': ['Las Vegas', 'LAS'],
+            '奥兰多': ['Orlando', 'MCO'],
+            '坦帕': ['Tampa', 'TPA'],
+            '凤凰城': ['Phoenix', 'PHX'],
+            '圣迭戈': ['San Diego', 'SAN'],
+            '波特兰': ['Portland', 'PDX'],
+            '丹佛': ['Denver', 'DEN'],
+            '明尼阿波利斯': ['Minneapolis', 'MSP'],
+            '底特律': ['Detroit', 'DTW'],
+            '克利夫兰': ['Cleveland', 'CLE'],
+            '匹兹堡': ['Pittsburgh', 'PIT'],
+            '辛辛那提': ['Cincinnati', 'CVG'],
+            '圣路易斯': ['St Louis', 'STL'],
+            '新奥尔良': ['New Orleans', 'MSY'],
+            '亚特兰大': ['Atlanta', 'ATL'],
+            '夏洛特': ['Charlotte', 'CLT'],
+            '迈阿密': ['Miami', 'MIA'],
+            '坦帕': ['Tampa', 'TPA'],
+            '奥兰多': ['Orlando', 'MCO'],
+            '杰克逊维尔': ['Jacksonville', 'JAX'],
+            '巴尔的摩': ['Baltimore', 'BWI'],
+            '华盛顿': ['Washington', 'IAD', 'DCA'],
+            '里士满': ['Richmond', 'RIC'],
+            '诺福克': ['Norfolk', 'ORF'],
+            '纳什维尔': ['Nashville', 'BNA'],
+            '孟菲斯': ['Memphis', 'MEM'],
+            '路易维尔': ['Louisville', 'SDF'],
+            '新奥尔良': ['New Orleans', 'MSY'],
+            '休斯顿': ['Houston', 'IAH', 'HOU'],
+            '圣安东尼奥': ['San Antonio', 'SAT'],
+            '奥斯汀': ['Austin', 'AUS'],
+            '达拉斯': ['Dallas', 'DFW'],
+            '沃斯堡': ['Fort Worth', 'DFW'],
+            '俄克拉荷马城': ['Oklahoma City', 'OKC'],
+            '塔尔萨': ['Tulsa', 'TUL'],
+            '阿尔伯克基': ['Albuquerque', 'ABQ'],
+            '凤凰城': ['Phoenix', 'PHX'],
+            '图森': ['Tucson', 'TUS'],
+            '拉斯维加斯': ['Las Vegas', 'LAS'],
+            '里诺': ['Reno', 'RNO'],
+            '萨克拉门托': ['Sacramento', 'SMF'],
+            '圣何塞': ['San Jose', 'SJC'],
+            '奥克兰': ['Oakland', 'OAK'],
+            '圣迭戈': ['San Diego', 'SAN'],
+            '洛杉矶': ['Los Angeles', 'LAX'],
+            '旧金山': ['San Francisco', 'SFO'],
+            '波特兰': ['Portland', 'PDX'],
+            '西雅图': ['Seattle', 'SEA'],
+            '安克雷奇': ['Anchorage', 'ANC'],
+            '费尔班克斯': ['Fairbanks', 'FAI'],
+            '檀香山': ['Honolulu', 'HNL'],
+            '凯卢阿': ['Kailua', 'LIH'],
+            '开罗': ['Cairo', 'CAI'],
+            '亚历山大': ['Alexandria', 'ALY'],
+            '塞得港': ['Port Said', 'PSD'],
+            '苏伊士': ['Suez', 'SZY'],
+            '吉萨': ['Giza', 'SPX'],
+            '卢克索': ['Luxor', 'LXR'],
+            '阿斯旺': ['Aswan', 'ASW'],
+            '沙姆沙伊赫': ['Sharm El Sheikh', 'SSH'],
+            '马特鲁港': ['Mersa Matruh', 'MUH'],
+            '明亚': ['Minya', 'MYW'],
+            '贝尼苏韦夫': ['Beni Suef', 'BNS'],
+            '艾斯尤特': ['Assiut', 'ATZ'],
+            '索哈杰': ['Sohag', 'HMB'],
+            '基纳': ['Qena', 'ENA'],
+            '新河谷': ['New Valley', 'FJR'],
+            '达赫拉': ['Dakhla', 'DHX'],
+            '巴哈里亚': ['Bahariya', 'BHH'],
+            '锡瓦': ['Siwa', 'SXF'],
+            '马特鲁': ['Marsa Matruh', 'MUH'],
+            '塔巴': ['Taba', 'TCP'],
+            '努韦巴': ['Nuweiba', 'NWB'],
+            '亚喀巴': ['Aqaba', 'AQJ'],
+            '埃拉特': ['Eilat', 'ETH'],
+            '阿卡巴': ['Aqaba', 'AQJ']
+        };
+
+        // 获取中文对应的英文关键词
+        function getEnglishKeywords(chineseQuery) {
+            const keywords = [];
+            // 查找精确匹配
+            if (CHINESE_TO_ENGLISH[chineseQuery]) {
+                keywords.push(...CHINESE_TO_ENGLISH[chineseQuery]);
+            }
+            // 查找包含匹配
+            Object.keys(CHINESE_TO_ENGLISH).forEach(key => {
+                if (key.includes(chineseQuery) || chineseQuery.includes(key)) {
+                    keywords.push(...CHINESE_TO_ENGLISH[key]);
+                }
+            });
+            return [...new Set(keywords)]; // 去重
+        }
+
+        // 搜索建议功能
+        function searchAirports(query, type) {
+            const dropdown = document.getElementById(type + 'Dropdown');
+            if (!query || query.length < 1) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            const queryUpper = query.toUpperCase();
+            const queryLower = query.toLowerCase();
+
+            // 获取中文对应的英文关键词
+            const englishKeywords = getEnglishKeywords(query);
+
+            // 判断是否是中文输入
+            const isChinese = /[\u4e00-\u9fa5]/.test(query);
+            
+            // 中文转拼音（用于搜索）
+            const pinyinQuery = isChinese ? chineseToPinyin(query) : '';
+            
+            // 搜索匹配：IATA码、城市、国家，支持中英文和拼音
+            const matches = airportsData.filter(airport => {
+                if (isChinese) {
+                    // 中文输入：尝试多种匹配方式
+                    let matched = false;
+                    
+                    // 1. 先尝试中文映射表的关键词匹配
+                    if (englishKeywords.length > 0) {
+                        matched = englishKeywords.some(keyword => {
+                            const kwUpper = keyword.toUpperCase();
+                            const kwLower = keyword.toLowerCase();
+                            
+                            if (keyword.length === 2) {
+                                // 国家代码
+                                return airport.iso_country === kwUpper;
+                            } else if (keyword.length === 3) {
+                                // IATA码
+                                return airport.iata_code.toUpperCase() === kwUpper;
+                            } else {
+                                // 城市名或国家名
+                                if (airport.municipality && airport.municipality.toLowerCase().includes(kwLower)) {
+                                    return true;
+                                }
+                                if (airport.name && airport.name.toLowerCase().includes(kwLower)) {
+                                    return true;
+                                }
+                                if (airport.iso_country && airport.iso_country.toLowerCase().includes(kwLower)) {
+                                    return true;
+                                }
+                                return false;
+                            }
+                        });
+                    }
+                    
+                    // 2. 如果映射表没匹配到，尝试拼音匹配
+                    if (!matched && pinyinQuery) {
+                        const pinyinLower = pinyinQuery.toLowerCase();
+                        // 用拼音匹配城市名
+                        if (airport.municipality && airport.municipality.toLowerCase().includes(pinyinLower)) {
+                            matched = true;
+                        }
+                        // 用拼音匹配机场名称
+                        if (!matched && airport.name && airport.name.toLowerCase().includes(pinyinLower)) {
+                            matched = true;
+                        }
+                    }
+                    
+                    return matched;
+                } else {
+                    // 英文输入：使用原有的匹配逻辑
+                    return airport.iata_code.toUpperCase().includes(queryUpper) ||
+                           (airport.name && airport.name.toLowerCase().includes(queryLower)) ||
+                           (airport.municipality && airport.municipality.toLowerCase().includes(queryLower)) ||
+                           (airport.iso_country && airport.iso_country.toLowerCase().includes(queryLower));
+                }
+            }).slice(0, 10);
+
+            if (matches.length === 0) {
+                dropdown.innerHTML = '<div class="no-results">未找到匹配的机场</div>';
+            } else {
+                dropdown.innerHTML = '<div class="search-hint">↑↓ 选择机场，回车确认</div>' +
+                    matches.map((airport, index) => {
+                        // 获取城市和国家的中文名称
+                        const cityChinese = getChineseName(airport.municipality);
+                        const countryChinese = getChineseName(airport.iso_country);
+                        
+                        // 构建显示文本
+                        let cityText = airport.municipality || '未知城市';
+                        if (cityChinese) {
+                            cityText += ' <span class="chinese-name">(' + cityChinese + ')</span>';
+                        }
+                        
+                        let countryText = airport.iso_country || '未知国家';
+                        if (countryChinese) {
+                            countryText += ' <span class="chinese-name">(' + countryChinese + ')</span>';
+                        }
+                        
+                        return `
+                    <div class="autocomplete-item" data-iata="${airport.iata_code}" data-type="${type}">
+                        <div>
+                            <span class="airport-code">${airport.iata_code || '-'}</span>
+                            <span class="airport-name">${airport.name || '未知机场'}</span>
+                        </div>
+                        <div class="airport-city">${cityText}, ${countryText}</div>
+                    </div>
+                `;
+                    }).join('');
+            }
+
+            dropdown.classList.add('show');
+            originSelectedIndex = -1;
+            destSelectedIndex = -1;
+
+            // 添加点击事件
+            dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const iata = this.getAttribute('data-iata');
+                    const type = this.getAttribute('data-type');
+                    selectAirport(iata, type);
+                });
+            });
+        }
+
+        function selectAirport(iata, type) {
+            const input = document.getElementById(type + 'Iata');
+            input.value = iata;
+            hideDropdown(type);
+
+            // 找到机场信息并显示
+            const airport = airportsData.find(a => a.iata_code === iata);
+            if (airport) {
+                console.log(`已选择${type === 'origin' ? '起点' : '终点'}机场:`, airport.name);
+            }
+        }
+
+        function hideDropdown(type) {
+            const dropdown = document.getElementById(type + 'Dropdown');
+            dropdown.classList.remove('show');
+        }
+
+        function handleAutocompleteKeydown(event, type) {
+            const dropdown = document.getElementById(type + 'Dropdown');
+            if (!dropdown.classList.contains('show')) return;
+
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (items.length === 0) return;
+
+            const selectedIndex = type === 'origin' ? originSelectedIndex : destSelectedIndex;
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                const newIndex = selectedIndex < items.length - 1 ? selectedIndex + 1 : 0;
+                if (selectedIndex >= 0) items[selectedIndex].classList.remove('active');
+                items[newIndex].classList.add('active');
+                if (type === 'origin') originSelectedIndex = newIndex;
+                else destSelectedIndex = newIndex;
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                const newIndex = selectedIndex > 0 ? selectedIndex - 1 : items.length - 1;
+                if (selectedIndex >= 0) items[selectedIndex].classList.remove('active');
+                items[newIndex].classList.add('active');
+                if (type === 'origin') originSelectedIndex = newIndex;
+                else destSelectedIndex = newIndex;
+            } else if (event.key === 'Enter' && selectedIndex >= 0) {
+                event.preventDefault();
+                const iata = items[selectedIndex].getAttribute('data-iata');
+                selectAirport(iata, type);
+            } else if (event.key === 'Escape') {
+                hideDropdown(type);
+            }
+        }
+
+        // 初始化搜索建议事件监听
+        document.addEventListener('DOMContentLoaded', function() {
+            const originInput = document.getElementById('originIata');
+            const destInput = document.getElementById('destIata');
+
+            // 起点输入框事件
+            originInput.addEventListener('input', function(e) {
+                searchAirports(e.target.value, 'origin');
+            });
+
+            originInput.addEventListener('keydown', function(e) {
+                handleAutocompleteKeydown(e, 'origin');
+            });
+
+            originInput.addEventListener('focus', function(e) {
+                if (e.target.value.length >= 1) {
+                    searchAirports(e.target.value, 'origin');
+                }
+            });
+
+            originInput.addEventListener('blur', function() {
+                setTimeout(() => hideDropdown('origin'), 200);
+            });
+
+            // 终点输入框事件
+            destInput.addEventListener('input', function(e) {
+                searchAirports(e.target.value, 'dest');
+            });
+
+            destInput.addEventListener('keydown', function(e) {
+                handleAutocompleteKeydown(e, 'dest');
+            });
+
+            destInput.addEventListener('focus', function(e) {
+                if (e.target.value.length >= 1) {
+                    searchAirports(e.target.value, 'dest');
+                }
+            });
+
+            destInput.addEventListener('blur', function() {
+                setTimeout(() => hideDropdown('dest'), 200);
+            });
+        });
+
+        // 机场属性数据库
+        const AIRPORT_PROPERTIES = {
+            'PVG': { is_lcc_base: true, hub_size: 5 },
+            'SHA': { is_lcc_base: true, hub_size: 5 },
+            'CAN': { is_lcc_base: true, hub_size: 5 },
+            'SZX': { is_lcc_base: true, hub_size: 5 },
+            'CTU': { is_lcc_base: true, hub_size: 5 },
+            'PEK': { is_lcc_base: false, hub_size: 5 },
+            'PKX': { is_lcc_base: true, hub_size: 5 },
+            'LAX': { is_lcc_base: true, hub_size: 5 },
+            'JFK': { is_lcc_base: false, hub_size: 5 },
+            'LHR': { is_lcc_base: false, hub_size: 5 },
+            'CDG': { is_lcc_base: false, hub_size: 5 },
+            'NRT': { is_lcc_base: false, hub_size: 5 },
+            'ICN': { is_lcc_base: true, hub_size: 5 },
+            'SIN': { is_lcc_base: false, hub_size: 5 },
+            'default': { is_lcc_base: false, hub_size: 2 }
+        };
+
+        function getAirportProperties(iata) {
+            return AIRPORT_PROPERTIES[iata.toUpperCase()] || AIRPORT_PROPERTIES['default'];
+        }
+
+        // 计算预估价格（单位：元）
+        function calculateEstimatedPrice(originIata, destIata, distance) {
+            const originProps = getAirportProperties(originIata);
+            const destProps = getAirportProperties(destIata);
+            
+            // 基础票价（最低票价）
+            let price = 100;
+            
+            // 距离因素（每公里约0.3元）
+            price += distance * 0.3;
+            
+            // LCC折扣（低成本航司基地打8折）
+            let discount = 1;
+            if (originProps.is_lcc_base || destProps.is_lcc_base) {
+                discount *= 0.8;
+            }
+            
+            // 竞争折扣（机场吞吐量越高，折扣越大）
+            const avgHubSize = (originProps.hub_size + destProps.hub_size) / 2;
+            discount *= (1 - avgHubSize * 0.02); // 每级减少2%
+            
+            // 应用折扣
+            price *= discount;
+            
+            // 随机波动（±10%）
+            const randomFactor = 0.9 + Math.random() * 0.2;
+            price *= randomFactor;
+            
+            // 确保最低价格不低于50元
+            price = Math.max(price, 50);
+            
+            return Math.round(price);
+        }
+
+        function calculateLowCostScore(originIata, destIata) {
+            let totalScore = 0;
+            const breakdown = {
+                originLcc: 0,
+                destLcc: 0,
+                competition: 0,
+                distance: 0,
+                random: 0
+            };
+
+            const originProps = getAirportProperties(originIata);
+            const destProps = getAirportProperties(destIata);
+
+            if (originProps.is_lcc_base) breakdown.originLcc = 15;
+            if (destProps.is_lcc_base) breakdown.destLcc = 15;
+            breakdown.lccTotal = breakdown.originLcc + breakdown.destLcc;
+            totalScore += Math.min(breakdown.lccTotal, 30);
+
+            const avgHubSize = (originProps.hub_size + destProps.hub_size) / 2;
+            breakdown.competition = Math.round((avgHubSize / 5) * 30);
+            totalScore += breakdown.competition;
+
+            const originAirport = airportsData.find(a => a.iata_code === originIata.toUpperCase());
+            const destAirport = airportsData.find(a => a.iata_code === destIata.toUpperCase());
+
+            if (originAirport && destAirport) {
+                const distance = haversineDistance(
+                    originAirport.latitude_deg,
+                    originAirport.longitude_deg,
+                    destAirport.latitude_deg,
+                    destAirport.longitude_deg
+                );
+                breakdown.distanceKm = Math.round(distance);
+
+                if (distance >= 800 && distance <= 1500) {
+                    breakdown.distance = 20;
+                    breakdown.distanceTip = '800-1500km最佳区间';
+                } else {
+                    breakdown.distance = 10;
+                    breakdown.distanceTip = '其他距离区间';
+                }
+            } else {
+                breakdown.distanceKm = 0;
+                breakdown.distance = 10;
+                breakdown.distanceTip = '数据缺失';
+            }
+            totalScore += breakdown.distance;
+
+            const seed = originIata.toUpperCase().charCodeAt(0) + destIata.toUpperCase().charCodeAt(0);
+            const randomFactor = ((seed * 9301 + 49297) % 233280) / 233280;
+            breakdown.random = Math.round(randomFactor * 20);
+            totalScore += breakdown.random;
+
+            breakdown.total = Math.min(100, Math.max(0, totalScore));
+            breakdown.originHubSize = originProps.hub_size;
+            breakdown.destHubSize = destProps.hub_size;
+            breakdown.originIsLcc = originProps.is_lcc_base;
+            breakdown.destIsLcc = destProps.is_lcc_base;
+
+            return breakdown;
+        }
+
+        function scoreToStars(score) {
+            if (score >= 80) return 5;
+            if (score >= 65) return 4;
+            if (score >= 50) return 3;
+            if (score >= 35) return 2;
+            return 1;
+        }
+
+        function generateStarsHTML(stars) {
+            let html = '<div class="star-rating">';
+            for (let i = 1; i <= 5; i++) {
+                html += `<span class="star ${i <= stars ? 'filled' : ''}">★</span>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function toRad(deg) {
+            return deg * (Math.PI / 180);
+        }
+
+        async function loadAirportsData() {
+            try {
+                const response = await fetch('airports_full.csv');
+                const text = await response.text();
+                const lines = text.split('\n').filter(line => line.trim());
+                const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                
+                airportsData = lines.slice(1).map(line => {
+                    const values = parseCSVLine(line);
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                        obj[header] = values[index] ? values[index].replace(/"/g, '') : '';
+                    });
+                    obj.latitude_deg = parseFloat(obj.latitude_deg) || 0;
+                    obj.longitude_deg = parseFloat(obj.longitude_deg) || 0;
+                    return obj;
+                });
+
+                airportsData = airportsData.filter(a => a.iata_code && a.iata_code.length === 3);
+                console.log(`已加载 ${airportsData.length} 个机场数据`);
+                initMaps();
+            } catch (error) {
+                showError('加载数据失败，请确保 airports_full.csv 文件存在');
+            }
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        function initMaps() {
+            // 搜索页面地图
+            searchMap = L.map('searchMap', {
+                center: [35, 105],
+                zoom: 5,
+                zoomControl: true,
+                scrollWheelZoom: true
+            });
+
+            // 使用高德地图瓦片（国内访问更快）
+            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                attribution: '高德地图',
+                subdomains: '1234',
+                maxZoom: 19,
+                tileSize: 256
+            }).addTo(searchMap).on('load', function() {
+                // 地图瓦片加载完成后隐藏加载动画
+                document.getElementById('searchMapLoader').classList.add('hidden');
+            });
+
+            L.control.scale({
+                position: 'bottomright',
+                imperial: false
+            }).addTo(searchMap);
+
+            // 结果页面地图
+            resultMap = L.map('resultMap', {
+                center: [35, 105],
+                zoom: 5,
+                zoomControl: true,
+                scrollWheelZoom: true
+            });
+
+            // 使用高德地图瓦片（国内访问更快）
+            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                attribution: '高德地图',
+                subdomains: '1234',
+                maxZoom: 19,
+                tileSize: 256
+            }).addTo(resultMap).on('load', function() {
+                // 地图瓦片加载完成后隐藏加载动画
+                document.getElementById('resultMapLoader').classList.add('hidden');
+            });
+
+            L.control.scale({
+                position: 'bottomright',
+                imperial: false
+            }).addTo(resultMap);
+        }
+
+        async function searchRoutes() {
+            const originIata = document.getElementById('originIata').value.toUpperCase().trim();
+            const originRadius = parseInt(document.getElementById('originRadius').value) || 300;
+            const destIata = document.getElementById('destIata').value.toUpperCase().trim();
+            const destRadius = parseInt(document.getElementById('destRadius').value) || 300;
+
+            if (!originIata || originIata.length !== 3) {
+                showError('请输入有效的起点机场IATA码（例如：PEK）');
+                return;
+            }
+
+            const originAirport = airportsData.find(a => a.iata_code === originIata);
+            if (!originAirport) {
+                showError(`未找到起点机场: ${originIata}`);
+                return;
+            }
+
+            if (!destIata || destIata.length !== 3) {
+                showError('请输入有效的终点机场IATA码（例如：SHA）');
+                return;
+            }
+
+            const destAirport = airportsData.find(a => a.iata_code === destIata);
+            if (!destAirport) {
+                showError(`未找到终点机场: ${destIata}`);
+                return;
+            }
+
+            // 计算周边机场
+            const originNearby = airportsData
+                .filter(a => a.iata_code !== originAirport.iata_code)
+                .map(a => ({
+                    ...a,
+                    distance: haversineDistance(
+                        originAirport.latitude_deg,
+                        originAirport.longitude_deg,
+                        a.latitude_deg,
+                        a.longitude_deg
+                    )
+                }))
+                .filter(a => a.distance <= originRadius)
+                .sort((a, b) => a.distance - b.distance);
+
+            const destNearby = airportsData
+                .filter(a => a.iata_code !== destAirport.iata_code)
+                .map(a => ({
+                    ...a,
+                    distance: haversineDistance(
+                        destAirport.latitude_deg,
+                        destAirport.longitude_deg,
+                        a.latitude_deg,
+                        a.longitude_deg
+                    )
+                }))
+                .filter(a => a.distance <= destRadius)
+                .sort((a, b) => a.distance - b.distance);
+
+            // 生成航线组合
+            const allOrigins = [{...originAirport, distance: 0}].concat(originNearby);
+            const allDests = [{...destAirport, distance: 0}].concat(destNearby);
+
+            allRoutes = [];
+            allOrigins.forEach(origin => {
+                allDests.forEach(dest => {
+                    if (origin.iata_code !== dest.iata_code) {
+                        const distance = haversineDistance(
+                            origin.latitude_deg,
+                            origin.longitude_deg,
+                            dest.latitude_deg,
+                            dest.longitude_deg
+                        );
+                        const scoreBreakdown = calculateLowCostScore(origin.iata_code, dest.iata_code);
+                        const estimatedPrice = calculateEstimatedPrice(origin.iata_code, dest.iata_code, distance);
+
+                        allRoutes.push({
+                            origin: origin,
+                            dest: dest,
+                            distance: distance,
+                            scoreBreakdown: scoreBreakdown,
+                            estimatedPrice: estimatedPrice
+                        });
+                    }
+                });
+            });
+
+            allRoutes.sort((a, b) => b.scoreBreakdown.total - a.scoreBreakdown.total);
+            displayedRoutesCount = 5;
+            routesExpanded = false;
+            airportExpanded = false;
+            displayedAirportCount = 5;
+
+            // 更新UI
+            updateResultPage(originAirport, destAirport, originNearby, destNearby);
+            switchToResultPage();
+            updateResultMap(originAirport, originNearby, originRadius, destAirport, destNearby, destRadius);
+        }
+
+        function updateResultPage(originAirport, destAirport, originNearby, destNearby) {
+            document.getElementById('originInfo').textContent = `${originAirport.iata_code} - ${originAirport.name}`;
+            document.getElementById('destInfo').textContent = `${destAirport.iata_code} - ${destAirport.name}`;
+
+            document.getElementById('tabOrigin').textContent = `起点周边${document.getElementById('originRadius').value}km机场`;
+            document.getElementById('tabDest').textContent = `终点周边${document.getElementById('destRadius').value}km机场`;
+
+            originNearbyAll = originNearby;
+            destNearbyAll = destNearby;
+            displayedAirportCount = 5;
+            airportExpanded = false;
+
+            displayRoutes();
+            displayOriginAirports(originAirport, originNearby);
+            displayDestAirports(destAirport, destNearby);
+        }
+
+        function displayRoutes() {
+            const tbody = document.getElementById('routesBody');
+            const routesToShow = allRoutes.slice(0, displayedRoutesCount);
+
+            if (routesToShow.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 30px; color:#999;">没有找到航线组合</td></tr>';
+                document.getElementById('viewAllBtn').style.display = 'none';
+                return;
+            }
+
+            tbody.innerHTML = routesToShow.map((route, index) => {
+                const breakdown = route.scoreBreakdown;
+                const score = breakdown.total;
+                const stars = scoreToStars(score);
+                const starsHTML = generateStarsHTML(stars);
+
+                // 获取城市和国家的中文名称
+                const originCityCn = getChineseName(route.origin.municipality) || '';
+                const destCityCn = getChineseName(route.dest.municipality) || '';
+                const originCountryCn = getChineseName(route.origin.iso_country) || '';
+                const destCountryCn = getChineseName(route.dest.iso_country) || '';
+
+                return `
+                <tr style="cursor:pointer;" onclick="showDetailModal(${index})">
+                    <td>
+                        <div class="route-airport">${route.origin.iata_code}<span>${route.origin.name}</span></div>
+                        <div class="route-location">${route.origin.municipality || '未知'}${originCityCn ? ' (' + originCityCn + ')' : ''}, ${route.origin.iso_country || '未知'}${originCountryCn ? ' (' + originCountryCn + ')' : ''}</div>
+                    </td>
+                    <td>
+                        <div class="route-airport">${route.dest.iata_code}<span>${route.dest.name}</span></div>
+                        <div class="route-location">${route.dest.municipality || '未知'}${destCityCn ? ' (' + destCityCn + ')' : ''}, ${route.dest.iso_country || '未知'}${destCountryCn ? ' (' + destCountryCn + ')' : ''}</div>
+                    </td>
+                    <td class="route-distance">${route.distance.toFixed(1)} km</td>
+                    <td>
+                        <div class="score-cell">
+                            <div class="score-value">${score}分</div>
+                            ${starsHTML}
+                        </div>
+                    </td>
+                    <td class="route-price">
+                        <span class="price-value">¥${route.estimatedPrice}</span>
+                        <span class="price-hint">预估</span>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+
+            document.getElementById('viewAllBtn').textContent = routesExpanded ? '收起部分' : `查看全部 (${allRoutes.length})`;
+            document.getElementById('viewAllBtn').style.display = allRoutes.length > 5 ? 'block' : 'none';
+            document.getElementById('viewAllBtn').onclick = viewAllRoutes;
+        }
+
+        function displayOriginAirports(mainAirport, nearby) {
+            const container = document.getElementById('originAirportList');
+            const toShow = nearby.slice(0, displayedAirportCount);
+            
+            let html = `<div class="airport-item origin" style="background:#e3f2fd;">
+                <div class="airport-info">
+                    <h4>${mainAirport.name}</h4>
+                    <p>${mainAirport.iata_code} · ${mainAirport.municipality || '未知'} · ${mainAirport.iso_country || '未知'}</p>
+                </div>
+                <div class="airport-distance">
+                    <div class="distance-value" style="color:#1565c0;">起点</div>
+                </div>
+            </div>`;
+
+            html += toShow.map(airport => `
+                <div class="airport-item origin">
+                    <div class="airport-info">
+                        <h4>${airport.name}</h4>
+                        <p>${airport.iata_code} · ${airport.municipality || '未知'}</p>
+                    </div>
+                    <div class="airport-distance">
+                        <div class="distance-value">${airport.distance.toFixed(1)}</div>
+                        <div class="distance-unit">公里</div>
+                    </div>
+                </div>
+            `).join('');
+
+            if (nearby.length > 5) {
+                html += `<button class="view-all-btn" onclick="toggleOriginAirports(${nearby.length})" id="originToggleBtn">
+                    ${airportExpanded ? '收起部分' : `查看全部 (${nearby.length})`}
+                </button>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function toggleOriginAirports(total) {
+            if (airportExpanded) {
+                displayedAirportCount = 5;
+                airportExpanded = false;
+            } else {
+                displayedAirportCount = total;
+                airportExpanded = true;
+            }
+            const originAirport = airportsData.find(a => a.iata_code === document.getElementById('originIata').value.toUpperCase());
+            displayOriginAirports(originAirport, originNearbyAll);
+        }
+
+        function displayDestAirports(mainAirport, nearby) {
+            const container = document.getElementById('destAirportList');
+            const toShow = nearby.slice(0, displayedAirportCount);
+            
+            let html = `<div class="airport-item destination" style="background:#e8f5e9;">
+                <div class="airport-info">
+                    <h4>${mainAirport.name}</h4>
+                    <p>${mainAirport.iata_code} · ${mainAirport.municipality || '未知'} · ${mainAirport.iso_country || '未知'}</p>
+                </div>
+                <div class="airport-distance">
+                    <div class="distance-value" style="color:#2e7d32;">终点</div>
+                </div>
+            </div>`;
+
+            html += toShow.map(airport => `
+                <div class="airport-item destination">
+                    <div class="airport-info">
+                        <h4>${airport.name}</h4>
+                        <p>${airport.iata_code} · ${airport.municipality || '未知'}</p>
+                    </div>
+                    <div class="airport-distance">
+                        <div class="distance-value">${airport.distance.toFixed(1)}</div>
+                        <div class="distance-unit">公里</div>
+                    </div>
+                </div>
+            `).join('');
+
+            if (nearby.length > 5) {
+                html += `<button class="view-all-btn" onclick="toggleDestAirports(${nearby.length})" id="destToggleBtn">
+                    ${airportExpanded ? '收起部分' : `查看全部 (${nearby.length})`}
+                </button>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function toggleDestAirports(total) {
+            if (airportExpanded) {
+                displayedAirportCount = 5;
+                airportExpanded = false;
+            } else {
+                displayedAirportCount = total;
+                airportExpanded = true;
+            }
+            const destAirport = airportsData.find(a => a.iata_code === document.getElementById('destIata').value.toUpperCase());
+            displayDestAirports(destAirport, destNearbyAll);
+        }
+
+        function updateResultMap(origin, originNearby, originRadius, dest, destNearby, destRadius) {
+            resultMap.eachLayer(layer => {
+                if (layer !== resultMap._layers[Object.keys(resultMap._layers)[0]]) {
+                    resultMap.removeLayer(layer);
+                }
+            });
+
+            const centerLat = (origin.latitude_deg + dest.latitude_deg) / 2;
+            const centerLon = (origin.longitude_deg + dest.longitude_deg) / 2;
+            const maxLat = Math.max(origin.latitude_deg, dest.latitude_deg, ...originNearby.map(a => a.latitude_deg), ...destNearby.map(a => a.latitude_deg));
+            const minLat = Math.min(origin.latitude_deg, dest.latitude_deg, ...originNearby.map(a => a.latitude_deg), ...destNearby.map(a => a.latitude_deg));
+            const maxLon = Math.max(origin.longitude_deg, dest.longitude_deg, ...originNearby.map(a => a.longitude_deg), ...destNearby.map(a => a.longitude_deg));
+            const minLon = Math.min(origin.longitude_deg, dest.longitude_deg, ...originNearby.map(a => a.longitude_deg), ...destNearby.map(a => a.longitude_deg));
+
+            const latDiff = maxLat - minLat;
+            const lonDiff = maxLon - minLon;
+            const maxDiff = Math.max(latDiff, lonDiff);
+            
+            let zoom = 3;
+            if (maxDiff < 1) zoom = 10;
+            else if (maxDiff < 2) zoom = 9;
+            else if (maxDiff < 5) zoom = 7;
+            else if (maxDiff < 10) zoom = 5;
+            else if (maxDiff < 20) zoom = 4;
+
+            resultMap.setView([centerLat, centerLon], zoom);
+
+            // 起点标记
+            L.marker([origin.latitude_deg, origin.longitude_deg], {
+                icon: L.divIcon({
+                    className: 'origin-marker',
+                    html: '<div style="background:#1e88e5; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(30,136,238,0.5); outline:none; border:none;"><i class="fas fa-plane-departure" style="color:white; font-size:18px;"></i></div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                })
+            }).addTo(resultMap).bindPopup(`<strong>${origin.name}</strong><br>IATA: ${origin.iata_code}<br><span style="color:#1565c0;">起点机场</span>`);
+
+            // 终点标记
+            L.marker([dest.latitude_deg, dest.longitude_deg], {
+                icon: L.divIcon({
+                    className: 'dest-marker',
+                    html: '<div style="background:#4caf50; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(76,175,80,0.5); outline:none; border:none;"><i class="fas fa-plane-arrival" style="color:white; font-size:18px;"></i></div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                })
+            }).addTo(resultMap).bindPopup(`<strong>${dest.name}</strong><br>IATA: ${dest.iata_code}<br><span style="color:#2e7d32;">终点机场</span>`);
+
+            // 起点半径圈
+            L.circle([origin.latitude_deg, origin.longitude_deg], {
+                radius: originRadius * 1000,
+                color: '#42a5f5',
+                fillColor: '#42a5f5',
+                fillOpacity: 0.1,
+                dashArray: '5,5'
+            }).addTo(resultMap).bindPopup(`起点搜索半径: ${originRadius}公里`);
+
+            // 终点半径圈
+            L.circle([dest.latitude_deg, dest.longitude_deg], {
+                radius: destRadius * 1000,
+                color: '#66bb6a',
+                fillColor: '#66bb6a',
+                fillOpacity: 0.1,
+                dashArray: '5,5'
+            }).addTo(resultMap).bindPopup(`终点搜索半径: ${destRadius}公里`);
+
+            // 清空之前的航线连线
+            routePolylines.forEach(polyline => {
+                resultMap.removeLayer(polyline);
+            });
+            routePolylines = [];
+
+            // 起点周边机场
+            originNearby.forEach(airport => {
+                L.marker([airport.latitude_deg, airport.longitude_deg], {
+                    icon: L.divIcon({
+                        html: '<div style="background:#90caf9; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; outline:none; border:none;"><i class="fas fa-circle" style="color:#1565c0; font-size:10px;"></i></div>',
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 14]
+                    })
+                }).addTo(resultMap).bindPopup(`<strong>${airport.name}</strong><br>IATA: ${airport.iata_code}<br>距离: ${airport.distance.toFixed(1)}公里`);
+            });
+
+            // 终点周边机场
+            destNearby.forEach(airport => {
+                L.marker([airport.latitude_deg, airport.longitude_deg], {
+                    icon: L.divIcon({
+                        html: '<div style="background:#a5d6a7; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; outline:none; border:none;"><i class="fas fa-circle" style="color:#2e7d32; font-size:10px;"></i></div>',
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 14]
+                    })
+                }).addTo(resultMap).bindPopup(`<strong>${airport.name}</strong><br>IATA: ${airport.iata_code}<br>距离: ${airport.distance.toFixed(1)}公里`);
+            });
+
+            // 为每条航线添加连线
+            allRoutes.forEach((route, index) => {
+                const polyline = L.polyline(
+                    [[route.origin.latitude_deg, route.origin.longitude_deg], [route.dest.latitude_deg, route.dest.longitude_deg]], 
+                    {
+                        color: index === 0 ? '#f44336' : '#ddd',
+                        weight: index === 0 ? 5 : 2,
+                        opacity: index === 0 ? 0.8 : 0.3,
+                        dashArray: index === 0 ? '10,10' : '5,5'
+                    }
+                ).addTo(resultMap);
+                
+                polyline.routeIndex = index;
+                routePolylines.push(polyline);
+            });
+        }
+
+        function switchToResultPage() {
+            document.getElementById('searchPage').classList.remove('active');
+            document.getElementById('resultPage').classList.add('active');
+            document.getElementById('backBtn').style.display = 'block';
+            // 地图尺寸可能发生变化，需要重新计算
+            setTimeout(() => {
+                if (resultMap) {
+                    resultMap.invalidateSize();
+                }
+            }, 100);
+        }
+
+        function goBack() {
+            document.getElementById('resultPage').classList.remove('active');
+            document.getElementById('searchPage').classList.add('active');
+            document.getElementById('backBtn').style.display = 'none';
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+            document.getElementById(`content${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+        }
+
+        let currentDetailIndex = -1;
+
+        function showDetailModal(index) {
+            currentDetailIndex = index;
+            
+            // 重置页签状态
+            document.getElementById('tabScore').classList.add('active');
+            document.getElementById('tabPrice').classList.remove('active');
+            
+            // 默认显示评分详情
+            showDetailContent('score');
+            
+            document.getElementById('detailModal').classList.add('show');
+            
+            // 高亮地图上对应的航线
+            highlightRouteOnMap(index);
+        }
+
+        function highlightRouteOnMap(index) {
+            if (!resultMap || routePolylines.length === 0) return;
+            
+            routePolylines.forEach((polyline, i) => {
+                if (i === index) {
+                    // 高亮选中的航线
+                    polyline.setStyle({
+                        color: '#f44336',
+                        weight: 5,
+                        opacity: 0.8,
+                        dashArray: '10,10'
+                    });
+                } else {
+                    // 其他航线变灰
+                    polyline.setStyle({
+                        color: '#ddd',
+                        weight: 2,
+                        opacity: 0.3,
+                        dashArray: '5,5'
+                    });
+                }
+            });
+            
+            // 聚焦到选中的航线
+            const route = allRoutes[index];
+            if (route) {
+                const bounds = L.latLngBounds([
+                    [route.origin.latitude_deg, route.origin.longitude_deg],
+                    [route.dest.latitude_deg, route.dest.longitude_deg]
+                ]);
+                resultMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+            }
+        }
+
+        function showDetailContent(tabType) {
+            if (currentDetailIndex < 0) return;
+            
+            const route = allRoutes[currentDetailIndex];
+            const breakdown = route.scoreBreakdown;
+            const score = breakdown.total;
+            const stars = scoreToStars(score);
+            const starsHTML = generateStarsHTML(stars);
+
+            // 获取城市和国家的中文名称
+            const originCityCn = getChineseName(route.origin.municipality) || '';
+            const destCityCn = getChineseName(route.dest.municipality) || '';
+            const originCountryCn = getChineseName(route.origin.iso_country) || '';
+            const destCountryCn = getChineseName(route.dest.iso_country) || '';
+
+            // 获取机场属性用于价格计算
+            const originProps = getAirportProperties(route.origin.iata_code);
+            const destProps = getAirportProperties(route.dest.iata_code);
+            const avgHubSize = (originProps.hub_size + destProps.hub_size) / 2;
+            const isLccRoute = originProps.is_lcc_base || destProps.is_lcc_base;
+            const lccDiscount = isLccRoute ? 0.8 : 1;
+            const competitionDiscount = (1 - avgHubSize * 0.02);
+            const distanceBasePrice = route.distance * 0.3;
+
+            // 更新页签状态
+            document.getElementById('tabScore').classList.toggle('active', tabType === 'score');
+            document.getElementById('tabPrice').classList.toggle('active', tabType === 'price');
+
+            if (tabType === 'score') {
+                document.getElementById('detailContent').innerHTML = `
+                    <div style="margin-bottom:15px; padding:15px; background:#f8f9fa; border-radius:10px;">
+                        <div style="font-weight:600; color:#333; margin-bottom:5px;">${route.origin.iata_code} → ${route.dest.iata_code}</div>
+                        <div style="font-size:14px; color:#666; margin-bottom:8px;">${route.origin.name} 到 ${route.dest.name}</div>
+                        <div style="font-size:13px; color:#888;">
+                            <div>出发地: ${route.origin.municipality || '未知'}${originCityCn ? ' (' + originCityCn + ')' : ''}, ${route.origin.iso_country || '未知'}${originCountryCn ? ' (' + originCountryCn + ')' : ''}</div>
+                            <div>目的地: ${route.dest.municipality || '未知'}${destCityCn ? ' (' + destCityCn + ')' : ''}, ${route.dest.iso_country || '未知'}${destCountryCn ? ' (' + destCountryCn + ')' : ''}</div>
+                        </div>
+                    </div>
+                    <div class="score-detail-grid">
+                        <div class="score-detail-item">
+                            <div class="label">出发地低成本航司基地</div>
+                            <div class="value">+${breakdown.originLcc}分</div>
+                            <div class="desc">
+                                <span class="lcc-badge ${breakdown.originIsLcc ? 'yes' : 'no'}">${breakdown.originIsLcc ? '是' : '否'}</span>
+                                ${route.origin.iata_code}
+                            </div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">目的地低成本航司基地</div>
+                            <div class="value">+${breakdown.destLcc}分</div>
+                            <div class="desc">
+                            <span class="lcc-badge ${breakdown.destIsLcc ? 'yes' : 'no'}">${breakdown.destIsLcc ? '是' : '否'}</span>
+                            ${route.dest.iata_code}
+                        </div>
+                    </div>
+                        <div class="score-detail-item">
+                            <div class="label">航线竞争度</div>
+                            <div class="value">+${breakdown.competition}分</div>
+                            <div class="desc">吞吐量: ${breakdown.originHubSize}级 | ${breakdown.destHubSize}级</div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">飞行距离</div>
+                            <div class="value">+${breakdown.distance}分</div>
+                            <div class="desc">${breakdown.distanceKm} km · ${breakdown.distanceTip}</div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">随机因子</div>
+                            <div class="value">+${breakdown.random}分</div>
+                            <div class="desc">保证计算一致性</div>
+                        </div>
+                    </div>
+                    <div class="score-summary">
+                        <div class="label">总分</div>
+                        <div class="value">${score}分</div>
+                        <div style="margin-top:5px;">${starsHTML}</div>
+                    </div>
+                `;
+            } else {
+                // 显示价格计算详情
+                document.getElementById('detailContent').innerHTML = `
+                    <div style="margin-bottom:15px; padding:15px; background:#f8f9fa; border-radius:10px;">
+                        <div style="font-weight:600; color:#333; margin-bottom:5px;">${route.origin.iata_code} → ${route.dest.iata_code}</div>
+                        <div style="font-size:14px; color:#666; margin-bottom:8px;">${route.origin.name} 到 ${route.dest.name}</div>
+                        <div style="font-size:13px; color:#888;">
+                            <div>出发地: ${route.origin.municipality || '未知'}${originCityCn ? ' (' + originCityCn + ')' : ''}, ${route.origin.iso_country || '未知'}${originCountryCn ? ' (' + originCountryCn + ')' : ''}</div>
+                            <div>目的地: ${route.dest.municipality || '未知'}${destCityCn ? ' (' + destCityCn + ')' : ''}, ${route.dest.iso_country || '未知'}${destCountryCn ? ' (' + destCountryCn + ')' : ''}</div>
+                        </div>
+                    </div>
+                    <div class="score-detail-grid">
+                        <div class="score-detail-item">
+                            <div class="label">基础票价</div>
+                            <div class="value">¥100</div>
+                            <div class="desc">固定基础费用</div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">距离费用</div>
+                            <div class="value">+¥${distanceBasePrice.toFixed(0)}</div>
+                            <div class="desc">${route.distance.toFixed(1)} km × ¥0.3/km</div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">低成本航司折扣</div>
+                            <div class="value">${isLccRoute ? '8折' : '无折扣'}</div>
+                            <div class="desc">${isLccRoute ? `${route.origin.iata_code}或${route.dest.iata_code}是LCC基地` : '非低成本航司航线'}</div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">竞争折扣</div>
+                            <div class="value">${(competitionDiscount * 100).toFixed(0)}%</div>
+                            <div class="desc">机场吞吐量: ${originProps.hub_size}级 | ${destProps.hub_size}级</div>
+                        </div>
+                        <div class="score-detail-item">
+                            <div class="label">随机波动</div>
+                            <div class="value">±10%</div>
+                            <div class="desc">模拟真实票价波动</div>
+                        </div>
+                    </div>
+                    <div class="score-summary">
+                        <div class="label">预估价格</div>
+                        <div class="value" style="color:#f44336; font-size:24px;">¥${route.estimatedPrice}</div>
+                        <div style="margin-top:5px; font-size:12px; color:#999;">* 价格仅供参考，请以实际查询为准</div>
+                    </div>
+                `;
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.remove('show');
+            currentDetailIndex = -1;
+        }
+
+        let routesExpanded = false;
+
+        function viewAllRoutes() {
+            if (routesExpanded) {
+                displayedRoutesCount = 5;
+                routesExpanded = false;
+                document.getElementById('viewAllBtn').textContent = `查看全部 (${allRoutes.length})`;
+            } else {
+                displayedRoutesCount = allRoutes.length;
+                routesExpanded = true;
+                document.getElementById('viewAllBtn').textContent = '收起部分';
+            }
+            displayRoutes();
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorToast').classList.add('show');
+            setTimeout(() => {
+                document.getElementById('errorToast').classList.remove('show');
+            }, 3000);
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAirportsData);
+    </script>
+</body>
+</html>

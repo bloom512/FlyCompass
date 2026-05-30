@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试 FlyClaw API</title>
+    <script>
+        async function testAPI() {
+            const from = document.getElementById('from').value.toUpperCase();
+            const to = document.getElementById('to').value.toUpperCase();
+            const date = document.getElementById('date').value;
+            
+            const url = `http://localhost:8081/price?from=${from}&to=${to}&date=${date}`;
+            console.log('请求 URL:', url);
+            
+            try {
+                const response = await fetch(url);
+                console.log('响应状态:', response.status);
+                
+                if (!response.ok) {
+                    document.getElementById('result').innerHTML = `请求失败: ${response.status}`;
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('响应数据:', data);
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>✈️ ${from} → ${to}</h3>
+                    <p>日期: ${date}</p>
+                    <p>距离: ${data.distance_km} 公里</p>
+                    <p>价格: ¥${data.price}</p>
+                `;
+            } catch (error) {
+                console.error('请求异常:', error);
+                document.getElementById('result').innerHTML = `请求异常: ${error.message}`;
+            }
+        }
+        
+        // 设置默认日期
+        window.onload = function() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('date').value = tomorrow.toISOString().split('T')[0];
+        };
+    </script>
+</head>
+<body>
+    <h1>FlyClaw API 测试</h1>
+    
+    <div>
+        <label>出发地:</label>
+        <input type="text" id="from" value="PEK" maxlength="3">
+        
+        <label>目的地:</label>
+        <input type="text" id="to" value="SHA" maxlength="3">
+        
+        <label>日期:</label>
+        <input type="date" id="date">
+        
+        <button onclick="testAPI()">查询价格</button>
+    </div>
+    
+    <div id="result"></div>
+</body>
+</html>
