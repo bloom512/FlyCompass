@@ -2204,10 +2204,14 @@
         }
 
         async function searchRoutes() {
+            console.log('searchRoutes called');
             const originIata = document.getElementById('originIata').value.toUpperCase().trim();
             const originRadius = parseInt(document.getElementById('originRadius').value) || 300;
             const destIata = document.getElementById('destIata').value.toUpperCase().trim();
             const destRadius = parseInt(document.getElementById('destRadius').value) || 300;
+
+            console.log('originIata:', originIata, 'originRadius:', originRadius, 'destIata:', destIata, 'destRadius:', destRadius);
+            console.log('airportsData length:', airportsData.length);
 
             if (!originIata || originIata.length !== 3) {
                 showError('请输入有效的起点机场IATA码（例如：PEK）');
@@ -2220,15 +2224,17 @@
                 return;
             }
 
-            if (!destIata || destIata.length !== 3) {
-                showError('请输入有效的终点机场IATA码（例如：SHA）');
-                return;
-            }
-
-            const destAirport = airportsData.find(a => a.iata_code === destIata);
-            if (!destAirport) {
-                showError(`未找到终点机场: ${destIata}`);
-                return;
+            let destAirport = null;
+            if (destIata) {
+                if (destIata.length !== 3) {
+                    showError('请输入有效的终点机场IATA码（例如：SHA）');
+                    return;
+                }
+                destAirport = airportsData.find(a => a.iata_code === destIata);
+                if (!destAirport) {
+                    showError(`未找到终点机场: ${destIata}`);
+                    return;
+                }
             }
 
             // 计算周边机场
@@ -2245,6 +2251,21 @@
                 }))
                 .filter(a => a.distance <= originRadius)
                 .sort((a, b) => a.distance - b.distance);
+
+            // 如果没有终点机场，执行单点搜索
+            if (!destAirport) {
+                // 单点搜索：只显示周边机场
+                allRoutes = [];
+                displayedRoutesCount = 0;
+                airportExpanded = false;
+                displayedAirportCount = 5;
+
+                // 更新UI
+                updateResultPage(originAirport, null, originNearby, []);
+                switchToResultPage();
+                updateResultMap(originAirport, originNearby, originRadius, null, [], 0);
+                return;
+            }
 
             const destNearby = airportsData
                 .filter(a => a.iata_code !== destAirport.iata_code)
@@ -2302,7 +2323,7 @@
 
         function updateResultPage(originAirport, destAirport, originNearby, destNearby) {
             document.getElementById('originInfo').textContent = `${originAirport.iata_code} - ${originAirport.name}`;
-            document.getElementById('destInfo').textContent = `${destAirport.iata_code} - ${destAirport.name}`;
+            document.getElementById('destInfo').textContent = destAirport ? `${destAirport.iata_code} - ${destAirport.name}` : '';
 
             document.getElementById('tabOrigin').textContent = `起点周边${document.getElementById('originRadius').value}km机场`;
             document.getElementById('tabDest').textContent = `终点周边${document.getElementById('destRadius').value}km机场`;
