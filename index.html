@@ -386,6 +386,11 @@
             font-style: italic;
         }
 
+        /* PC端隐藏移动端布局 */
+        .mobile-route-list {
+            display: none;
+        }
+
         .route-price {
             text-align: right;
         }
@@ -795,56 +800,131 @@
                 left: auto;
             }
 
-            /* 移动端表格优化 */
+            /* 移动端卡片式布局 */
             .routes-table-wrapper {
                 padding: 8px;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
             }
 
             .routes-table {
-                min-width: 500px;
-                font-size: 12px;
+                display: none;
             }
 
-            .routes-table th,
-            .routes-table td {
-                padding: 10px 8px;
-                font-size: 12px;
+            .mobile-route-list {
+                display: block;
             }
 
-            .routes-table th {
+            .mobile-route-card {
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border-radius: 16px;
+                padding: 16px;
+                margin-bottom: 10px;
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+                border: 1px solid rgba(0, 0, 0, 0.04);
+            }
+
+            .mobile-route-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 12px;
+            }
+
+            .mobile-route-airports {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex: 1;
+            }
+
+            .mobile-airport {
+                text-align: center;
+                flex: 1;
+            }
+
+            .mobile-airport-code {
+                font-size: 18px;
+                font-weight: 700;
+                color: #333;
+                display: block;
+            }
+
+            .mobile-airport-name {
                 font-size: 11px;
-                padding: 10px 6px;
-            }
-
-            .route-location {
-                font-size: 10px;
-                white-space: nowrap;
-                color: #888;
-            }
-
-            .score-value {
-                font-size: 14px;
-            }
-
-            .price-cell {
-                font-size: 14px;
-            }
-
-            .airport-code {
-                font-weight: 600;
-                font-size: 13px;
-            }
-
-            .airport-name {
-                font-size: 11px;
-                color: #555;
+                color: #666;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 display: block;
-                max-width: 120px;
+                max-width: 100px;
+            }
+
+            .mobile-route-arrow {
+                color: #999;
+                font-size: 16px;
+            }
+
+            .mobile-route-info {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                margin-bottom: 8px;
+            }
+
+            .mobile-info-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .mobile-info-icon {
+                font-size: 14px;
+                color: #6366f1;
+            }
+
+            .mobile-info-value {
+                font-size: 13px;
+                font-weight: 600;
+                color: #333;
+            }
+
+            .mobile-info-label {
+                font-size: 11px;
+                color: #999;
+            }
+
+            .mobile-route-footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            .mobile-score {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .mobile-score-value {
+                font-size: 16px;
+                font-weight: 700;
+                color: #e65100;
+            }
+
+            .mobile-price {
+                font-size: 18px;
+                font-weight: 700;
+                color: #f44336;
+            }
+
+            .mobile-location {
+                font-size: 10px;
+                color: #888;
+                margin-top: 4px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
         }
 
@@ -2239,14 +2319,17 @@
 
         function displayRoutes() {
             const tbody = document.getElementById('routesBody');
+            const mobileContainer = document.getElementById('mobileRoutes');
             const routesToShow = allRoutes.slice(0, displayedRoutesCount);
 
             if (routesToShow.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 30px; color:#999;">没有找到航线组合</td></tr>';
+                mobileContainer.innerHTML = '<div style="text-align:center; padding: 30px; color:#999;">没有找到航线组合</div>';
                 document.getElementById('viewAllBtn').style.display = 'none';
                 return;
             }
 
+            // 生成PC端表格
             tbody.innerHTML = routesToShow.map((route, index) => {
                 const breakdown = route.scoreBreakdown;
                 const score = breakdown.total;
@@ -2281,6 +2364,53 @@
                         <span class="price-hint">预估</span>
                     </td>
                 </tr>
+                `;
+            }).join('');
+
+            // 生成移动端卡片布局
+            mobileContainer.innerHTML = routesToShow.map((route, index) => {
+                const breakdown = route.scoreBreakdown;
+                const score = breakdown.total;
+                const stars = scoreToStars(score);
+                const starsHTML = generateStarsHTML(stars);
+
+                // 获取城市和国家的中文名称
+                const originCityCn = getChineseName(route.origin.municipality) || '';
+                const destCityCn = getChineseName(route.dest.municipality) || '';
+                const originCountryCn = getChineseName(route.origin.iso_country) || '';
+                const destCountryCn = getChineseName(route.dest.iso_country) || '';
+
+                return `
+                <div class="mobile-route-card" onclick="showDetailModal(${index})">
+                    <div class="mobile-route-header">
+                        <div class="mobile-route-airports">
+                            <div class="mobile-airport">
+                                <span class="mobile-airport-code">${route.origin.iata_code}</span>
+                                <span class="mobile-airport-name">${route.origin.name}</span>
+                                <span class="mobile-location">${route.origin.municipality || '未知'}${originCityCn ? ' (' + originCityCn + ')' : ''}, ${route.origin.iso_country || '未知'}${originCountryCn ? ' (' + originCountryCn + ')' : ''}</span>
+                            </div>
+                            <span class="mobile-route-arrow"><i class="fas fa-arrow-right"></i></span>
+                            <div class="mobile-airport">
+                                <span class="mobile-airport-code">${route.dest.iata_code}</span>
+                                <span class="mobile-airport-name">${route.dest.name}</span>
+                                <span class="mobile-location">${route.dest.municipality || '未知'}${destCityCn ? ' (' + destCityCn + ')' : ''}, ${route.dest.iso_country || '未知'}${destCountryCn ? ' (' + destCountryCn + ')' : ''}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mobile-route-info">
+                        <div class="mobile-info-item">
+                            <i class="fas fa-route mobile-info-icon"></i>
+                            <span class="mobile-info-value">${route.distance.toFixed(1)} km</span>
+                        </div>
+                    </div>
+                    <div class="mobile-route-footer">
+                        <div class="mobile-score">
+                            <span class="mobile-score-value">${score}分</span>
+                            <span>${starsHTML}</span>
+                        </div>
+                        <span class="mobile-price">¥${route.estimatedPrice}</span>
+                    </div>
+                </div>
                 `;
             }).join('');
 
